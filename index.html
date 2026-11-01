@@ -66,7 +66,7 @@
         import { 
             ShieldAlert, Calendar, Clock, DollarSign, 
             CheckCircle, XCircle, LogOut, CheckSquare, 
-            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock, Instagram, MessageSquare, Phone, Search, UserX, RefreshCw
+            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock, Instagram, MessageSquare, Phone, Search, UserMinus
         } from 'lucide-react';
 
         // ==========================================
@@ -142,7 +142,13 @@
                     setUser(u);
                     if (u) {
                         const doc = await db.collection('profiles').doc(u.uid).get();
-                        if (doc.exists) setProfile({ id: doc.id, userId: u.uid, ...doc.data() });
+                        if (doc.exists) {
+                            setProfile({ id: doc.id, userId: u.uid, ...doc.data() });
+                        } else {
+                            // Account erased from database
+                            await auth.signOut();
+                            setProfile(null);
+                        }
                     } else {
                         setProfile(null);
                     }
@@ -162,7 +168,9 @@
                     const data = mapSnap(snap);
                     setProfiles(data);
                     const myProfile = data.find(p => p.userId === user.uid);
-                    if (myProfile) setProfile(myProfile);
+                    if (myProfile) {
+                        setProfile(myProfile);
+                    }
                 }));
                 unsubs.push(db.collection('treasury').orderBy('timestamp', 'desc').onSnapshot(snap => setTreasury(mapSnap(snap))));
                 unsubs.push(db.collection('hours').orderBy('timestamp', 'desc').onSnapshot(snap => setHours(mapSnap(snap))));
@@ -186,31 +194,38 @@
             const isFinance = profile?.role === ROLES.HEAD_FINANCE;
             const canModifyTreasury = isPresident || isFinance;
 
-            // --- HARD ERASE / REVOKE FUNCTION (Presidents only) ---
-            const handleRevokeMemberCompletely = async (targetUserId, targetName) => {
+            // --- GLOBAL MEMBER ERASE ACTION (PRESIDENT ONLY) ---
+            const handleEraseMember = async (targetProfile) => {
                 if (!isPresident) return;
-                if (!window.confirm(`Are you completely sure you want to permanently erase ${targetName} from the KhaSu Interact Club? This will wipe their membership from the directory, spreadsheet, and all event rosters.`)) {
+                if (targetProfile.role === ROLES.PRESIDENT) {
+                    alert("Presidents cannot be erased.");
                     return;
                 }
-                try {
-                    // 1. Delete profile document completely from Firestore
-                    await db.collection('profiles').doc(targetUserId).delete();
+                const confirmMsg = `Are you sure you want to completely erase ${targetProfile.name}${targetProfile.nickname ? ` (${targetProfile.nickname})` : ''}?
 
-                    // 2. Remove user from all Event Recruitment applicant lists
-                    const recsToUpdate = (eventRecruitments || []).filter(r => r.applicants && r.applicants.includes(targetUserId));
-                    for (const r of recsToUpdate) {
-                        const newApps = r.applicants.filter(id => id !== targetUserId);
-                        await db.collection('eventRecruitments').doc(r.id).update({ applicants: newApps });
+This will permanently remove them from the Member Lobby, the Admin Spreadsheet, and all Event Rosters.`;
+                if (!window.confirm(confirmMsg)) return;
+
+                const uid = targetProfile.userId || targetProfile.id;
+                try {
+                    // 1. Delete Firestore profile document completely
+                    await db.collection('profiles').doc(uid).delete();
+
+                    // 2. Remove their ID from all event applications
+                    const recs = (eventRecruitments || []).filter(r => r.applicants && r.applicants.includes(uid));
+                    for (const r of recs) {
+                        const updatedApplicants = r.applicants.filter(id => id !== uid);
+                        await db.collection('eventRecruitments').doc(r.id).update({ applicants: updatedApplicants });
                     }
 
-                    // 3. Close viewing modal if currently open
-                    if (viewingMemberProfile && viewingMemberProfile.userId === targetUserId) {
+                    // 3. Close modal if currently viewing this user
+                    if (viewingMemberProfile && (viewingMemberProfile.userId === uid || viewingMemberProfile.id === uid)) {
                         setViewingMemberProfile(null);
                     }
 
-                    alert(`${targetName} has been completely erased from all club systems.`);
+                    alert(`${targetProfile.name} has been completely erased from all club lists.`);
                 } catch (err) {
-                    alert("Error erasing member: " + err.message);
+                    alert("Error removing member: " + err.message);
                 }
             };
 
@@ -237,7 +252,7 @@
                 return <IdentityGate profiles={profiles} />;
             }
 
-            if (profile.status === 'Removed') return <BannedScreen />;
+            if (profile.status === 'Removed' || profile.status === 'Banned') return <BannedScreen />;
 
             const currentBalance = treasury.reduce((acc, curr) => acc + Number(curr.amount), 0);
 
@@ -355,13 +370,13 @@
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
                                 {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} isPresident={isPresident} isHead={isHead} onOpenMemberProfile={setViewingMemberProfile} />}
-                                {activeTab === 'members' && <MembersDirectoryView profiles={profiles} hours={hours} isPresident={isPresident} onOpenMemberProfile={setViewingMemberProfile} onRevokeMember={handleRevokeMemberCompletely} />}
+                                {activeTab === 'members' && <MembersDirectoryView profiles={profiles} hours={hours} isPresident={isPresident} onOpenMemberProfile={setViewingMemberProfile} onEraseMember={handleEraseMember} />}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
                                 {activeTab === 'reminders' && <RemindersView reminders={reminders} profile={profile} />}
                                 {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} profiles={profiles} onOpenMemberProfile={setViewingMemberProfile} />}
                                 {activeTab === 'hours' && !isPresident && <HoursView hours={hours} profile={profile} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
-                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} onOpenMemberProfile={setViewingMemberProfile} onRevokeMember={handleRevokeMemberCompletely} />}
+                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} onOpenMemberProfile={setViewingMemberProfile} onEraseMember={handleEraseMember} />}
                             </main>
 
                         </div>
@@ -380,7 +395,7 @@
                             hours={hours} 
                             isPresident={isPresident}
                             onClose={() => setViewingMemberProfile(null)} 
-                            onRevoke={handleRevokeMemberCompletely}
+                            onEraseMember={handleEraseMember}
                         />
                     )}
                 </div>
@@ -441,14 +456,19 @@
         }
 
         // ==========================================
-        // MEMBERS DIRECTORY & SEARCH & REVOKE
+        // MEMBERS DIRECTORY & COMPLETE PROFILE VIEW
         // ==========================================
-        function MembersDirectoryView({ profiles, hours, isPresident, onOpenMemberProfile, onRevokeMember }) {
+        function MembersDirectoryView({ profiles, hours, isPresident, onOpenMemberProfile, onEraseMember }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedSector, setSelectedSector] = useState('All');
 
-            // STRICT FILTER: Strictly only active profiles. Removes any ghost or Removed accounts immediately!
-            const activeMembers = profiles.filter(p => p.status === 'Active');
+            // Strictly filter out any removed, banned, or blank profiles
+            const activeMembers = profiles.filter(p => 
+                p.status !== 'Removed' && 
+                p.status !== 'Banned' && 
+                p.status !== 'deleted' && 
+                p.name
+            );
 
             const filteredMembers = activeMembers.filter(p => {
                 const term = searchTerm.toLowerCase().trim();
@@ -466,7 +486,7 @@
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-l-8 border-[#433f92] pl-4">
                         <div>
                             <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">Club Directory</h1>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Official roster of active KhaSu Interact Club members</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Discover, connect with, and inspect fellow members</p>
                         </div>
                         <span className="font-mono text-xs font-bold px-3 py-1 bg-black text-white self-start md:self-auto uppercase">
                             {filteredMembers.length} Active {filteredMembers.length === 1 ? 'Member' : 'Members'}
@@ -516,7 +536,7 @@
                                 <div 
                                     key={m.id || m.userId}
                                     onClick={() => onOpenMemberProfile(m)}
-                                    className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[8px_8px_0px_0px_#ec8b3f] hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between relative group"
+                                    className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[8px_8px_0px_0px_#ec8b3f] hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between"
                                 >
                                     <div>
                                         <div className="flex items-start gap-4 mb-4">
@@ -552,20 +572,19 @@
                                         </div>
                                     </div>
 
-                                    <div className="mt-5 pt-3 border-t-2 border-black flex items-center justify-between text-xs font-black uppercase">
-                                        <span className="text-[#433f92] dark:text-[#a09df0] flex items-center gap-1">
-                                            Dossier <ChevronLeft size={14} className="rotate-180" />
+                                    <div className="mt-5 pt-3 border-t-2 border-black flex items-center justify-between gap-2">
+                                        <span className="text-xs font-black uppercase text-[#433f92] dark:text-[#a09df0] flex items-center gap-1">
+                                            <span>Inspect Profile</span>
+                                            <ChevronLeft size={16} className="rotate-180" />
                                         </span>
-
-                                        {/* President Direct Revoke Button */}
                                         {isPresident && m.role !== ROLES.PRESIDENT && (
                                             <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    onRevokeMember(m.userId, m.name);
+                                                    onEraseMember(m);
                                                 }}
-                                                className="bg-red-600 hover:bg-black text-white px-3 py-1 text-[10px] font-black uppercase tracking-widest border border-black shadow-[2px_2px_0px_0px_#000] transition-colors"
-                                                title="Completely erase and revoke this member"
+                                                className="bg-red-600 hover:bg-black text-white text-[10px] font-black uppercase px-2.5 py-1 border border-black transition-colors"
+                                                title="Completely erase and revoke member"
                                             >
                                                 Revoke
                                             </button>
@@ -578,7 +597,7 @@
 
                     {filteredMembers.length === 0 && (
                         <div className="p-12 border-4 border-black bg-white dark:bg-gray-800 text-center space-y-2">
-                            <p className="font-black text-xl uppercase tracking-tighter">No members found</p>
+                            <p className="font-black text-xl uppercase tracking-tighter">No active members found</p>
                             <p className="text-sm font-mono text-gray-500">No member matches your search "{searchTerm}".</p>
                         </div>
                     )}
@@ -587,7 +606,7 @@
         }
 
         // --- COMPLETE MEMBER DOSSIER / PROFILE MODAL ---
-        function MemberProfileModal({ profile, hours, isPresident, onClose, onRevoke }) {
+        function MemberProfileModal({ profile, hours, isPresident, onClose, onEraseMember }) {
             const userApprovedHours = hours
                 .filter(h => h.userId === profile.userId && h.status === 'Approved')
                 .reduce((acc, h) => acc + Number(h.amount), 0);
@@ -661,7 +680,7 @@
 
                             {/* Contact Dossier */}
                             <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 space-y-3">
-                                <h4 className="text-xs font-black uppercase tracking-widest border-b-2 border-black pb-2 text-gray-500">Contact & Institutional Channels</h4>
+                                <h4 className="text-xs font-black uppercase tracking-widest border-b-2 border-black pb-2 text-gray-500">Contact Channels</h4>
                                 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                                     <div className="p-3 bg-gray-50 dark:bg-gray-900 border-2 border-black">
@@ -716,14 +735,14 @@
                                 </div>
                             </div>
 
-                            {/* President Action: Delete / Revoke from inside modal */}
+                            {/* President Revoke / Erase Action Button inside Modal */}
                             {isPresident && profile.role !== ROLES.PRESIDENT && (
-                                <div className="pt-4 border-t-4 border-black">
+                                <div className="pt-2 border-t-2 border-black">
                                     <button 
-                                        onClick={() => onRevoke(profile.userId, profile.name)}
-                                        className="w-full bg-red-600 hover:bg-black text-white p-4 font-black uppercase tracking-widest border-2 border-black shadow-[4px_4px_0px_0px_#000] flex items-center justify-center gap-2 transition-colors"
+                                        onClick={() => onEraseMember(profile)}
+                                        className="w-full bg-red-600 hover:bg-black text-white p-3.5 font-black uppercase tracking-widest text-xs border-2 border-transparent transition-colors flex items-center justify-center gap-2"
                                     >
-                                        <UserX size={18} /> Permanently Erase & Revoke Membership
+                                        <UserMinus size={16} /> Completely Revoke & Erase Member
                                     </button>
                                 </div>
                             )}
@@ -886,37 +905,43 @@
             );
         }
 
+        function BannedScreen() {
+            return (
+                <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
+                    <ShieldAlert size={64} className="text-red-600 mb-6" />
+                    <h1 className="text-4xl font-black text-white uppercase tracking-widest mb-4">Access Revoked</h1>
+                    <p className="text-gray-400 max-w-md font-mono">Your membership status has been updated by the administration. You no longer have active access to the KhaSu Interact Portal.</p>
+                </div>
+            );
+        }
+
         // --- ADMIN & SPREADSHEET VIEW ---
-        function AdminView({ profiles, isPresident, reports, currentUser, eventRecruitments, onOpenMemberProfile, onRevokeMember }) {
+        function AdminView({ profiles, isPresident, reports, currentUser, eventRecruitments, onOpenMemberProfile, onEraseMember }) {
             const [selectedUsers, setSelectedUsers] = useState([]);
             const [lastChecked, setLastChecked] = useState(null);
             
-            const [adminSearch, setAdminSearch] = useState('');
             const [bulkSector, setBulkSector] = useState('');
             const [bulkHours, setBulkHours] = useState('');
+            const [adminSearch, setAdminSearch] = useState('');
 
-            // Filter out Removed members and filter out other Presidents
-            const activeProfiles = profiles.filter(p => p.status === 'Active' && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
+            // Hide removed members and filter out other Presidents
+            const targetProfiles = profiles.filter(p => 
+                p.status !== 'Removed' && 
+                p.status !== 'Banned' && 
+                p.status !== 'deleted' && 
+                p.name && 
+                (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT)
+            );
 
-            const targetProfiles = activeProfiles.filter(p => {
+            const filteredProfiles = targetProfiles.filter(p => {
                 const term = adminSearch.toLowerCase().trim();
+                if (!term) return true;
                 const matchesName = p.name && p.name.toLowerCase().includes(term);
                 const matchesNick = p.nickname && p.nickname.toLowerCase().includes(term);
                 const matchesClass = p.schoolClass && p.schoolClass.toLowerCase().includes(term);
-                const matchesEmail = p.email && p.email.toLowerCase().includes(term);
-                return term === '' || matchesName || matchesNick || matchesClass || matchesEmail;
+                const matchesSector = p.sector && p.sector.toLowerCase().includes(term);
+                return matchesName || matchesNick || matchesClass || matchesSector;
             });
-
-            // Count any ghost/removed records lingering in database
-            const removedProfiles = profiles.filter(p => p.status === 'Removed');
-
-            const handlePurgeAllRemoved = async () => {
-                if (!window.confirm(`Permanently erase ${removedProfiles.length} inactive/removed ghost records from Firestore?`)) return;
-                for (const rp of removedProfiles) {
-                    await db.collection('profiles').doc(rp.userId || rp.id).delete();
-                }
-                alert("Database cleaned successfully.");
-            };
 
             const handleSendEmail = (targetEmail, subject, body) => {
                 window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}
@@ -936,7 +961,7 @@ KhaSu Interact Club`;
                 if (e.shiftKey && lastChecked !== null) {
                     const start = Math.min(index, lastChecked);
                     const end = Math.max(index, lastChecked);
-                    const rangeIds = targetProfiles.slice(start, end + 1).map(p => p.userId);
+                    const rangeIds = filteredProfiles.slice(start, end + 1).map(p => p.userId);
                     rangeIds.forEach(id => { if (!newSelected.includes(id)) newSelected.push(id); });
                 } else {
                     if (newSelected.includes(userId)) {
@@ -950,13 +975,13 @@ KhaSu Interact Club`;
             };
 
             const toggleAll = (e) => {
-                if (e.target.checked) setSelectedUsers(targetProfiles.map(p => p.userId));
+                if (e.target.checked) setSelectedUsers(filteredProfiles.map(p => p.userId));
                 else setSelectedUsers([]);
             };
 
-            // --- BULK HARD ERASE ACTION ---
+            // --- BULK ACTIONS (Complete Erase) ---
             const handleBulkErase = async () => {
-                if (!window.confirm(`Permanently erase ${selectedUsers.length} selected users from the database, directory, and event rosters?`)) return;
+                if (!window.confirm(`Are you sure you want to completely erase ${selectedUsers.length} selected users from the database and rosters?`)) return;
                 
                 for (const uid of selectedUsers) {
                     await db.collection('profiles').doc(uid).delete();
@@ -983,6 +1008,7 @@ KhaSu Interact Club`;
                 if (!bulkHours || selectedUsers.length === 0) return;
                 const promises = selectedUsers.map(uid => {
                     const p = profiles.find(x => x.userId === uid);
+                    if (!p) return Promise.resolve();
                     return db.collection('hours').add({
                         userId: uid, userName: p.name, amount: Number(bulkHours),
                         description: `Admin Adjustment by ${currentUser.name}`, status: 'Approved', timestamp: Date.now()
@@ -1017,47 +1043,37 @@ KhaSu Interact Club`;
                         </div>
                     )}
 
-                    <div className="bg-white dark:bg-gray-900 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92]">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-4 border-black pb-4 mb-6 gap-2">
+                    <div className="bg-white dark:bg-gray-900 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92] space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b-4 border-black pb-4 gap-4">
                             <div>
                                 <h2 className="text-3xl font-black uppercase tracking-tighter">Club Roster Spreadsheet</h2>
-                                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Manage, search, adjust hours, and erase members</p>
+                                <p className="text-xs font-mono text-gray-500">Real-time member registry and authorization control</p>
                             </div>
-                            <div className="flex items-center gap-3">
-                                {isPresident && removedProfiles.length > 0 && (
-                                    <button 
-                                        onClick={handlePurgeAllRemoved}
-                                        className="text-xs font-black uppercase tracking-widest bg-red-100 text-red-700 hover:bg-red-600 hover:text-white px-3 py-1.5 border border-red-600 transition-colors flex items-center gap-1"
-                                    >
-                                        <Trash2 size={14}/> Purge {removedProfiles.length} Inactive Ghost Records
-                                    </button>
-                                )}
-                                <span className="text-sm font-mono text-gray-500">{selectedUsers.length} Selected</span>
-                            </div>
+                            <span className="text-sm font-mono font-bold bg-black text-white px-3 py-1 self-start sm:self-auto uppercase">
+                                {selectedUsers.length} Selected
+                            </span>
                         </div>
 
-                        {/* Search in Admin */}
-                        <div className="mb-6">
-                            <div className="relative">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                                <input 
-                                    type="text"
-                                    value={adminSearch}
-                                    onChange={(e) => setAdminSearch(e.target.value)}
-                                    placeholder="Filter roster by member name, nickname, email, or class..."
-                                    className="w-full pl-12 pr-4 py-2.5 border-2 border-black dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none focus:border-[#ec8b3f]"
-                                />
-                                {adminSearch && (
-                                    <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-400 hover:text-black">
-                                        CLEAR
-                                    </button>
-                                )}
-                            </div>
+                        {/* Search Toolbar for Spreadsheet */}
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <input 
+                                type="text"
+                                value={adminSearch}
+                                onChange={(e) => setAdminSearch(e.target.value)}
+                                placeholder="Search spreadsheet by name, nickname, class, or sector..."
+                                className="w-full pl-12 pr-4 py-2.5 border-2 border-black dark:border-gray-600 bg-gray-50 dark:bg-gray-800 font-bold text-xs outline-none focus:border-[#ec8b3f]"
+                            />
+                            {adminSearch && (
+                                <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-400 hover:text-black dark:hover:text-white">
+                                    CLEAR
+                                </button>
+                            )}
                         </div>
 
-                        {/* Admin Bulk Toolbar */}
+                        {/* Admin Action Toolbar */}
                         {isPresident && (
-                            <div className="mb-6 p-4 border-4 border-[#ec8b3f] bg-orange-50 dark:bg-gray-800 flex flex-wrap gap-4 items-end">
+                            <div className="p-4 border-4 border-[#ec8b3f] bg-orange-50 dark:bg-gray-800 flex flex-wrap gap-4 items-end">
                                 <div>
                                     <label className="block text-[10px] font-black uppercase mb-1">Mass Sector Shift</label>
                                     <div className="flex gap-2">
@@ -1078,8 +1094,8 @@ KhaSu Interact Club`;
                                 </div>
 
                                 <div className="ml-auto">
-                                    <button onClick={handleBulkErase} disabled={selectedUsers.length===0} className="bg-red-600 text-white px-6 py-2 font-black text-xs uppercase tracking-widest border-2 border-transparent hover:bg-black disabled:opacity-50 shadow-[2px_2px_0px_0px_#000]">
-                                        Erase Selected ({selectedUsers.length})
+                                    <button onClick={handleBulkErase} disabled={selectedUsers.length===0} className="bg-red-600 text-white px-6 py-2 font-black text-xs uppercase tracking-widest border-2 border-transparent hover:bg-black disabled:opacity-50">
+                                        Revoke & Erase Selected
                                     </button>
                                 </div>
                             </div>
@@ -1091,20 +1107,19 @@ KhaSu Interact Club`;
                                 <thead>
                                     <tr className="bg-black text-white uppercase text-xs tracking-widest">
                                         {isPresident && <th className="p-3 border-r-2 border-gray-700 w-12 text-center"><input type="checkbox" onChange={toggleAll} className="accent-[#ec8b3f] w-4 h-4 cursor-pointer"/></th>}
-                                        <th className="p-3 border-r-2 border-gray-700">Name</th>
+                                        <th className="p-3 border-r-2 border-gray-700">Name & Nickname</th>
                                         <th className="p-3 border-r-2 border-gray-700">Role</th>
                                         <th className="p-3 border-r-2 border-gray-700">Sector</th>
                                         <th className="p-3 border-r-2 border-gray-700">Phone & Class</th>
                                         <th className="p-3 border-r-2 border-gray-700">Status</th>
-                                        <th className="p-3 border-r-2 border-gray-700">Contact</th>
-                                        {isPresident && <th className="p-3 text-center">Action</th>}
+                                        <th className="p-3">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {targetProfiles.map((p, index) => {
+                                    {filteredProfiles.map((p, index) => {
                                         const isSelected = selectedUsers.includes(p.userId);
                                         return (
-                                            <tr key={p.id || p.userId} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                                            <tr key={p.id} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                                                 {isPresident && (
                                                     <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-center">
                                                         <input 
@@ -1118,10 +1133,11 @@ KhaSu Interact Club`;
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">
                                                     <button 
                                                         onClick={() => onOpenMemberProfile && onOpenMemberProfile(p)}
-                                                        className="hover:text-[#ec8b3f] hover:underline text-left font-black"
-                                                        title="Click to view complete dossier"
+                                                        className="hover:text-[#ec8b3f] hover:underline text-left flex items-center gap-1.5"
+                                                        title="Click to view dossier"
                                                     >
-                                                        {p.name} {p.nickname && <span className="text-gray-500 lowercase font-mono">({p.nickname})</span>}
+                                                        <span>{p.name}</span>
+                                                        {p.nickname && <span className="text-gray-500 lowercase font-mono">({p.nickname})</span>}
                                                     </button>
                                                 </td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-black text-[#ec8b3f] tracking-widest uppercase">{p.role}</td>
@@ -1132,35 +1148,100 @@ KhaSu Interact Club`;
                                                 </td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700">
                                                     <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-green-200 text-green-800">
-                                                        {p.status}
+                                                        {p.status || 'Active'}
                                                     </span>
                                                 </td>
-                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700">
+                                                <td className="p-3 flex items-center gap-3">
                                                     <button onClick={() => handleSendEmail(p.email, "KhaSu Interact Update", "")} className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:underline hover:text-black">
-                                                        {p.email}
+                                                        Email
                                                     </button>
+                                                    {isPresident && p.role !== ROLES.PRESIDENT && (
+                                                        <button 
+                                                            onClick={() => onEraseMember(p)} 
+                                                            className="text-xs font-black uppercase text-red-600 hover:text-black dark:hover:text-white hover:underline"
+                                                            title="Completely remove member from system"
+                                                        >
+                                                            Revoke
+                                                        </button>
+                                                    )}
                                                 </td>
-                                                {isPresident && (
-                                                    <td className="p-3 text-center">
-                                                        {p.role !== ROLES.PRESIDENT ? (
-                                                            <button 
-                                                                onClick={() => onRevokeMember(p.userId, p.name)}
-                                                                className="text-[10px] font-black uppercase bg-red-600 hover:bg-black text-white px-3 py-1 border border-black shadow-[2px_2px_0px_0px_#000] transition-colors"
-                                                                title="Erase member permanently"
-                                                            >
-                                                                Erase
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-[10px] font-mono text-gray-400">Owner</span>
-                                                        )}
-                                                    </td>
-                                                )}
                                             </tr>
                                         )
                                     })}
                                 </tbody>
                             </table>
-                            {targetProfiles.length === 0 && <p className="p-6 text-center font-mono text-sm text-gray-500">No active members match your filter.</p>}
+                            {filteredProfiles.length === 0 && <p className="p-6 text-center font-mono text-sm text-gray-500">No active members found.</p>}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- HOURS VIEW (Non-presidents only) ---
+        function HoursView({ hours, profile, profiles }) {
+            const pendingHours = hours.filter(h => h.status === 'Pending' && h.userId === profile.userId);
+            const myHours = hours.filter(h => h.userId === profile.userId);
+
+            const [amount, setAmount] = useState('');
+            const [desc, setDesc] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!amount || !desc) return;
+                await db.collection('hours').add({
+                    userId: profile.userId,
+                    userName: profile.name,
+                    amount: Number(amount),
+                    description: desc,
+                    status: 'Pending',
+                    timestamp: Date.now()
+                });
+                setAmount(''); setDesc('');
+            };
+
+            return (
+                <div className="space-y-8 animate-fade-in-up">
+                    <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-[#ec8b3f] pl-4">Time Tracking</h1>
+
+                    <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92]">
+                        <h2 className="text-xl font-black uppercase tracking-widest mb-4">Log Hours</h2>
+                        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
+                            <input type="number" required min="0.5" step="0.5" placeholder="Hours" value={amount} onChange={e=>setAmount(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono font-bold w-full sm:w-1/4" />
+                            <input type="text" required placeholder="Description (e.g., Park Cleanup)" value={desc} onChange={e=>setDesc(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold flex-1" />
+                            <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Submit</button>
+                        </form>
+                    </div>
+
+                    {pendingHours.length > 0 && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border-4 border-amber-500 p-6">
+                            <h2 className="text-xl font-black uppercase tracking-widest mb-4 text-amber-700 dark:text-amber-500">Your Pending Approvals</h2>
+                            <div className="space-y-3">
+                                {pendingHours.map(h => (
+                                    <div key={h.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 border-2 border-amber-500">
+                                        <div>
+                                            <p className="font-bold">{h.userName} - {h.amount} hrs</p>
+                                            <p className="text-sm text-gray-500 font-mono">{h.description}</p>
+                                        </div>
+                                        <span className="text-xs font-black uppercase tracking-widest px-2 py-1 bg-amber-100 text-amber-700">Pending</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
+                        <h2 className="text-xl font-black uppercase tracking-widest mb-4">My History</h2>
+                        <div className="space-y-2">
+                            {myHours.map(h => (
+                                <div key={h.id} className="flex justify-between items-center p-3 border-b-2 border-gray-200 dark:border-gray-700">
+                                    <span className="font-bold">{h.description}</span>
+                                    <div className="flex gap-4 items-center">
+                                        <span className="font-mono">{h.amount} hrs</span>
+                                        <span className={`text-xs font-black uppercase tracking-widest px-2 py-1 ${h.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{h.status}</span>
+                                    </div>
+                                </div>
+                            ))}
+                            {myHours.length === 0 && <p className="text-gray-500 text-sm font-mono">No hours logged.</p>}
                         </div>
                     </div>
                 </div>
@@ -1262,6 +1343,61 @@ KhaSu Interact Club`;
                                 <button type="submit" className="bg-black text-white hover:bg-[#ec8b3f] hover:text-black px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Update Password</button>
                             </form>
                         </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- REPORTS VIEW ---
+        function ReportsView({ reports, profile, profiles }) {
+            const [reportedUser, setReportedUser] = useState('');
+            const [reason, setReason] = useState('');
+            const [success, setSuccess] = useState(false);
+
+            const activeProfiles = profiles.filter(p => p.status !== 'Removed' && p.userId !== profile.userId);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!reportedUser || !reason) return;
+                const target = profiles.find(p => p.id === reportedUser);
+                if(!target) return;
+
+                await db.collection('reports').add({
+                    reportedUserId: target.id, reportedUserName: target.name, reporterId: profile.userId, reporterName: profile.name, reason, status: 'Open', timestamp: Date.now()
+                });
+                setReportedUser(''); setReason(''); setSuccess(true);
+                setTimeout(() => setSuccess(false), 3000);
+            };
+
+            return (
+                <div className="max-w-3xl mx-auto animate-fade-in-up">
+                    <div className="bg-[#f4f4f0] dark:bg-gray-800 p-8 border-4 border-red-600 shadow-[8px_8px_0px_0px_#dc2626]">
+                        <h2 className="text-4xl font-black mb-3 flex items-center gap-3 text-red-600 uppercase tracking-tighter">
+                            <Flag size={32} strokeWidth={3} /> Report Misconduct
+                        </h2>
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-300 mb-8 p-4 bg-red-100 dark:bg-red-900/30 border-2 border-red-300">
+                            WARNING: Reports are NOT anonymous. Misuse of the reporting system may result in penalties. 
+                            Reports are sent directly to the Presidents.
+                        </p>
+
+                        {success && <div className="mb-6 p-4 bg-black text-white font-black uppercase text-center border-2 border-green-500">Report submitted officially.</div>}
+
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div>
+                                <label className="block text-xs uppercase font-black mb-2 tracking-widest text-black dark:text-white">Member to Report</label>
+                                <select required value={reportedUser} onChange={e=>setReportedUser(e.target.value)} className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-900 rounded-none p-4 outline-none focus:border-red-600 font-bold uppercase cursor-pointer">
+                                    <option value="">Select Member...</option>
+                                    {activeProfiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs uppercase font-black mb-2 tracking-widest text-black dark:text-white">Detailed Reason</label>
+                                <textarea required placeholder="Describe the incident objectively..." value={reason} onChange={e=>setReason(e.target.value)} className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-900 rounded-none p-4 outline-none focus:border-red-600 h-40 font-mono text-sm" />
+                            </div>
+                            <button type="submit" className="bg-red-600 hover:bg-black text-white px-8 py-4 border-2 border-transparent hover:border-red-600 font-black uppercase tracking-widest transition-colors w-full">
+                                Submit Official Report
+                            </button>
+                        </form>
                     </div>
                 </div>
             );
