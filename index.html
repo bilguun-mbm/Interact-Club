@@ -66,7 +66,7 @@
         import { 
             ShieldAlert, Calendar, Clock, DollarSign, 
             CheckCircle, XCircle, LogOut, CheckSquare, 
-            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save
+            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock
         } from 'lucide-react';
 
         // ==========================================
@@ -125,6 +125,7 @@
             const [eventIdeas, setEventIdeas] = useState([]);
             const [eventRecruitments, setEventRecruitments] = useState([]);
             const [news, setNews] = useState([]);
+            const [reminders, setReminders] = useState([]);
 
             // UI State
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -168,6 +169,7 @@
                 unsubs.push(db.collection('eventIdeas').orderBy('timestamp', 'desc').onSnapshot(snap => setEventIdeas(mapSnap(snap))));
                 unsubs.push(db.collection('eventRecruitments').orderBy('timestamp', 'desc').onSnapshot(snap => setEventRecruitments(mapSnap(snap))));
                 unsubs.push(db.collection('news').orderBy('timestamp', 'desc').onSnapshot(snap => setNews(mapSnap(snap))));
+                unsubs.push(db.collection('reminders').where('userId', '==', user.uid).onSnapshot(snap => setReminders(mapSnap(snap))));
 
                 return () => unsubs.forEach(unsub => unsub());
             }, [user]);
@@ -214,6 +216,7 @@
                 { id: 'dashboard', label: 'Dashboard', Icon: CheckSquare },
                 { id: 'events', label: 'Events & Roles', Icon: Calendar },
                 { id: 'hours', label: 'Time Tracking', Icon: Clock },
+                { id: 'reminders', label: 'My Reminders', Icon: Bell },
                 ...(!isPresident ? [{ id: 'reports', label: 'Report Center', Icon: Flag }] : []),
                 ...((isPresident || isHead) ? [{ id: 'admin', label: 'Administration', Icon: ShieldAlert }] : [])
             ];
@@ -311,8 +314,9 @@
 
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
-                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} />}
+                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} />}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
+                                {activeTab === 'reminders' && <RemindersView reminders={reminders} profile={profile} />}
                                 {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} />}
                                 {activeTab === 'hours' && <HoursView hours={hours} profile={profile} isPresident={isPresident} isHead={isHead} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
@@ -358,7 +362,7 @@
                     <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA0MCAwIEwgMCAwIDAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgwLDAsMCwwLjA1KSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] dark:bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA0MCAwIEwgMCAwIDAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjA1KSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-50"></div>
                     
                     <div 
-                        className="absolute rounded-full blur-[100px] opacity-40 dark:opacity-20 transition-transform duration-1000 ease-out"
+                        className="absolute rounded-full blur-[100px] opacity-75 dark:opacity-50 transition-transform duration-1000 ease-out saturate-200"
                         style={{ 
                             width: '60vw', height: '60vw',
                             background: 'radial-gradient(circle, #433f92 0%, transparent 70%)',
@@ -366,7 +370,7 @@
                         }}
                     />
                     <div 
-                        className="absolute rounded-full blur-[80px] opacity-30 dark:opacity-10 transition-transform duration-[1500ms] ease-out delay-75"
+                        className="absolute rounded-full blur-[80px] opacity-60 dark:opacity-30 transition-transform duration-[1500ms] ease-out delay-75 saturate-200"
                         style={{ 
                             width: '40vw', height: '40vw',
                             background: 'radial-gradient(circle, #ec8b3f 0%, transparent 70%)',
@@ -526,7 +530,7 @@
         }
 
         // --- CALENDAR COMPONENT ---
-        function DashboardCalendar({ events, eventRecruitments, profile }) {
+        function DashboardCalendar({ events, eventRecruitments, profile, reminders = [] }) {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedEvent, setSelectedEvent] = useState(null);
             
@@ -546,10 +550,15 @@
             const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
             const getEventsForDay = (day) => {
-                return events.filter(ev => {
+                const dayEvents = events.filter(ev => {
                     const d = new Date(ev.date);
                     return d.getFullYear() === currentDate.getFullYear() && d.getMonth() === currentDate.getMonth() && d.getDate() === day;
                 });
+                const dayReminders = reminders.filter(rm => {
+                    const d = new Date(rm.date);
+                    return d.getFullYear() === currentDate.getFullYear() && d.getMonth() === currentDate.getMonth() && d.getDate() === day;
+                });
+                return { dayEvents, dayReminders };
             };
 
             const handleApply = async (recruitment) => {
@@ -599,20 +608,20 @@
                         <div className="grid grid-cols-7 gap-px bg-black flex-1">
                             {blanks.map(b => <div key={`blank-${b}`} className="bg-white dark:bg-gray-800 min-h-[60px] sm:min-h-[80px]"></div>)}
                             {days.map(d => {
-                                const dayEvents = getEventsForDay(d);
+                                const { dayEvents, dayReminders } = getEventsForDay(d);
                                 const isToday = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), d).toDateString();
                                 return (
                                     <div key={d} className={`bg-white dark:bg-gray-800 min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 flex flex-col ${isToday ? 'bg-[#ec8b3f]/10 dark:bg-[#ec8b3f]/20' : ''}`}>
                                         <span className={`text-xs sm:text-sm font-bold ${isToday ? 'text-[#ec8b3f] underline' : 'text-gray-700 dark:text-gray-300'}`}>{d}</span>
                                         <div className="flex-1 overflow-y-auto mt-1 space-y-1 custom-scrollbar">
                                             {dayEvents.map((ev, idx) => (
-                                                <div 
-                                                    key={idx} 
-                                                    onClick={() => setSelectedEvent(ev)}
-                                                    className="text-[8px] sm:text-[9px] font-black uppercase bg-[#433f92] hover:bg-[#ec8b3f] transition-colors text-white p-0.5 sm:p-1 truncate cursor-pointer" 
-                                                    title={ev.title}
-                                                >
+                                                <div key={`ev-${idx}`} onClick={() => setSelectedEvent(ev)} className="text-[8px] sm:text-[9px] font-black uppercase bg-[#433f92] hover:bg-[#ec8b3f] transition-colors text-white p-0.5 sm:p-1 truncate cursor-pointer" title={ev.title}>
                                                     {ev.title}
+                                                </div>
+                                            ))}
+                                            {dayReminders.map((rm, idx) => (
+                                                <div key={`rm-${idx}`} className="text-[8px] sm:text-[9px] font-black uppercase bg-emerald-600 text-white p-0.5 sm:p-1 truncate border-l-2 border-emerald-300 cursor-help" title={rm.text}>
+                                                    🔔 {rm.text}
                                                 </div>
                                             ))}
                                         </div>
@@ -699,7 +708,7 @@
         }
 
         // --- DASHBOARD VIEW ---
-        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news }) {
+        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news, reminders }) {
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
@@ -773,7 +782,7 @@
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-8">
-                            <DashboardCalendar events={events || []} eventRecruitments={eventRecruitments} profile={profile} />
+                            <DashboardCalendar events={events || []} eventRecruitments={eventRecruitments} profile={profile} reminders={reminders} />
                             
                             {/* ANNOUNCEMENTS & NEWS FEED */}
                             <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
@@ -1094,6 +1103,54 @@
                 </div>
             );
         }
+        
+        // --- REMINDERS VIEW ---
+        function RemindersView({ reminders, profile }) {
+            const [text, setText] = useState('');
+            const [date, setDate] = useState('');
+
+            const handleAdd = async (e) => {
+                e.preventDefault();
+                if (!text || !date) return;
+                await db.collection('reminders').add({
+                    userId: profile.userId, text, date, timestamp: Date.now()
+                });
+                setText(''); setDate('');
+            };
+
+            const handleDelete = async (id) => {
+                await db.collection('reminders').doc(id).delete();
+            };
+
+            return (
+                <div className="space-y-8 animate-fade-in-up max-w-4xl mx-auto">
+                    <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-emerald-500 pl-4">Personal Reminders</h1>
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border-4 border-emerald-500 p-6 shadow-[8px_8px_0px_0px_#10b981]">
+                        <h2 className="text-xl font-black uppercase tracking-widest mb-4 text-emerald-700 dark:text-emerald-500">Add Private Reminder</h2>
+                        <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-4">
+                            <input type="text" required placeholder="What do you need to do?" value={text} onChange={e=>setText(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-800 p-3 outline-none font-bold flex-1" />
+                            <input type="date" required value={date} onChange={e=>setDate(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-800 p-3 outline-none font-mono font-bold w-full sm:w-1/3" />
+                            <button type="submit" className="bg-emerald-500 hover:bg-black text-white px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Add</button>
+                        </form>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
+                        <h2 className="text-xl font-black uppercase tracking-widest mb-4">My Schedule</h2>
+                        <div className="space-y-2">
+                            {reminders.sort((a,b) => new Date(a.date) - new Date(b.date)).map(rm => (
+                                <div key={rm.id} className="flex justify-between items-center p-3 border-b-2 border-gray-200 dark:border-gray-700">
+                                    <div>
+                                        <span className="font-bold block">{rm.text}</span>
+                                        <span className="font-mono text-xs text-gray-500">{new Date(rm.date).toLocaleDateString()}</span>
+                                    </div>
+                                    <button onClick={() => handleDelete(rm.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+                                </div>
+                            ))}
+                            {reminders.length === 0 && <p className="text-gray-500 text-sm font-mono">No reminders set.</p>}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
 
         // --- HOURS VIEW ---
         function HoursView({ hours, profile, isPresident, isHead, profiles }) {
@@ -1125,14 +1182,16 @@
                 <div className="space-y-8 animate-fade-in-up">
                     <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-[#ec8b3f] pl-4">Time Tracking</h1>
 
-                    <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92]">
-                        <h2 className="text-xl font-black uppercase tracking-widest mb-4">Log Hours</h2>
-                        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
-                            <input type="number" required min="0.5" step="0.5" placeholder="Hours" value={amount} onChange={e=>setAmount(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono font-bold w-full sm:w-1/4" />
-                            <input type="text" required placeholder="Description (e.g., Park Cleanup)" value={desc} onChange={e=>setDesc(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold flex-1" />
-                            <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-8 py-3 font-black uppercase tracking-widest transition-colors">Submit</button>
-                        </form>
-                    </div>
+                    {!isPresident && (
+                        <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92]">
+                            <h2 className="text-xl font-black uppercase tracking-widest mb-4">Log Hours</h2>
+                            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
+                                <input type="number" required min="0.5" step="0.5" placeholder="Hours" value={amount} onChange={e=>setAmount(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono font-bold w-full sm:w-1/4" />
+                                <input type="text" required placeholder="Description (e.g., Park Cleanup)" value={desc} onChange={e=>setDesc(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold flex-1" />
+                                <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Submit</button>
+                            </form>
+                        </div>
+                    )}
 
                     {(isPresident || isHead) && pendingHours.length > 0 && (
                         <div className="bg-amber-50 dark:bg-amber-900/20 border-4 border-amber-500 p-6">
@@ -1227,6 +1286,15 @@
 
         // --- ADMIN & SPREADSHEET VIEW ---
         function AdminView({ profiles, isPresident, reports, currentUser }) {
+            const [selectedUsers, setSelectedUsers] = useState([]);
+            const [lastChecked, setLastChecked] = useState(null);
+            
+            const [bulkSector, setBulkSector] = useState('');
+            const [bulkHours, setBulkHours] = useState('');
+
+            // Filter out other Presidents (so they cannot be mass-selected/edited by each other)
+            const targetProfiles = profiles.filter(p => p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT);
+
             const handleSendEmail = (targetEmail, subject, body) => {
                 window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}
 
@@ -1235,17 +1303,63 @@ Sent by ${currentUser.name}, ${currentUser.role}
 KhaSu Interact Club`;
             };
 
-            const handleRemoveMember = async (profileObj) => {
-                if (profileObj.role === ROLES.PRESIDENT) return;
-                if (!window.confirm(`Permanently ban ${profileObj.name}?`)) return;
-                await db.collection('profiles').doc(profileObj.userId).update({ status: 'Removed' });
-                handleSendEmail(profileObj.email, "KhaSu Interact Club - Membership Revoked", `Dear ${profileObj.name},
-
-Your membership in the KhaSu Interact Club has been formally terminated. You no longer have access to the portal.`);
-            };
-
             const handleDismissReport = async (reportId) => {
                 await db.collection('reports').doc(reportId).update({ status: 'Dismissed' });
+            };
+
+            // --- MASS SELECT LOGIC (Shift-Click) ---
+            const handleCheck = (e, userId, index) => {
+                let newSelected = [...selectedUsers];
+                if (e.shiftKey && lastChecked !== null) {
+                    const start = Math.min(index, lastChecked);
+                    const end = Math.max(index, lastChecked);
+                    const rangeIds = targetProfiles.slice(start, end + 1).map(p => p.userId);
+                    rangeIds.forEach(id => { if (!newSelected.includes(id)) newSelected.push(id); });
+                } else {
+                    if (newSelected.includes(userId)) {
+                        newSelected = newSelected.filter(id => id !== userId);
+                    } else {
+                        newSelected.push(userId);
+                    }
+                }
+                setSelectedUsers(newSelected);
+                setLastChecked(index);
+            };
+
+            const toggleAll = (e) => {
+                if (e.target.checked) setSelectedUsers(targetProfiles.map(p => p.userId));
+                else setSelectedUsers([]);
+            };
+
+            // --- BULK ACTIONS ---
+            const handleBulkBan = async () => {
+                if (!window.confirm(`Permanently ban ${selectedUsers.length} selected users?`)) return;
+                const promises = selectedUsers.map(id => db.collection('profiles').doc(id).update({ status: 'Removed' }));
+                await Promise.all(promises);
+                setSelectedUsers([]);
+                alert("Users removed.");
+            };
+
+            const handleBulkSectorChange = async () => {
+                if (!bulkSector || selectedUsers.length === 0) return;
+                const promises = selectedUsers.map(id => db.collection('profiles').doc(id).update({ sector: bulkSector }));
+                await Promise.all(promises);
+                setSelectedUsers([]); setBulkSector('');
+                alert("Sectors updated.");
+            };
+
+            const handleBulkHoursAdjust = async () => {
+                if (!bulkHours || selectedUsers.length === 0) return;
+                const promises = selectedUsers.map(uid => {
+                    const p = profiles.find(x => x.userId === uid);
+                    return db.collection('hours').add({
+                        userId: uid, userName: p.name, amount: Number(bulkHours),
+                        description: `Admin Adjustment by ${currentUser.name}`, status: 'Approved', timestamp: Date.now()
+                    });
+                });
+                await Promise.all(promises);
+                setSelectedUsers([]); setBulkHours('');
+                alert(`Logged ${bulkHours} hrs for ${selectedUsers.length} members.`);
             };
 
             return (
@@ -1273,32 +1387,88 @@ Your membership in the KhaSu Interact Club has been formally terminated. You no 
                     )}
 
                     <div className="bg-white dark:bg-gray-900 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92]">
-                        <h2 className="text-3xl font-black mb-6 uppercase tracking-tighter border-b-4 border-black pb-2">Club Roster & Status</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {profiles.map(p => (
-                                <div key={p.id} className={`border-4 p-4 ${p.status === 'Removed' ? 'border-red-600 bg-red-50 dark:bg-red-900/20 opacity-50' : 'border-black bg-white dark:bg-gray-800'}`}>
-                                    <div className="flex items-start justify-between">
-                                        <h3 className="font-black text-lg uppercase truncate">{p.name}</h3>
-                                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 ${p.status === 'Removed' ? 'bg-red-600 text-white' : 'bg-green-200 text-green-800'}`}>
-                                            {p.status}
-                                        </span>
+                        <h2 className="text-3xl font-black mb-6 uppercase tracking-tighter border-b-4 border-black pb-2 flex justify-between items-end">
+                            <span>Club Roster Spreadsheet</span>
+                            <span className="text-sm font-mono text-gray-500">{selectedUsers.length} Selected</span>
+                        </h2>
+
+                        {/* Admin Toolbar */}
+                        {isPresident && (
+                            <div className="mb-6 p-4 border-4 border-[#ec8b3f] bg-orange-50 dark:bg-gray-800 flex flex-wrap gap-4 items-end">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase mb-1">Mass Sector Shift</label>
+                                    <div className="flex gap-2">
+                                        <select value={bulkSector} onChange={e=>setBulkSector(e.target.value)} className="border-2 border-black p-2 text-xs font-bold uppercase outline-none dark:bg-gray-700">
+                                            <option value="">Select Sector...</option>
+                                            {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                        <button onClick={handleBulkSectorChange} disabled={selectedUsers.length===0} className="bg-black text-white px-4 font-black text-xs uppercase border-2 border-transparent disabled:opacity-50">Apply</button>
                                     </div>
-                                    <div className="mt-2">
-                                        <p className="text-xs text-[#ec8b3f] font-black uppercase tracking-widest mb-2 border-b-2 border-gray-200 pb-2">{p.role}</p>
-                                        <a href={`mailto:${p.email}`} className="text-[10px] text-gray-500 hover:text-[#433f92] hover:underline font-mono truncate flex items-center gap-1">
-                                            <Mail size={12}/> {p.email}
-                                        </a>
-                                    </div>
-                                    
-                                    {isPresident && p.status !== 'Removed' && p.role !== ROLES.PRESIDENT && (
-                                        <div className="mt-5 flex gap-2">
-                                            <button onClick={() => handleRemoveMember(p)} className="flex-1 bg-red-100 text-red-700 py-2 text-xs font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-colors border-2 border-red-600">
-                                                Ban
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
-                            ))}
+                                
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase mb-1">Adjust Hours (+/-)</label>
+                                    <div className="flex gap-2">
+                                        <input type="number" step="0.5" value={bulkHours} onChange={e=>setBulkHours(e.target.value)} className="border-2 border-black p-2 text-xs font-mono w-24 outline-none dark:bg-gray-700" placeholder="e.g. 2.5" />
+                                        <button onClick={handleBulkHoursAdjust} disabled={selectedUsers.length===0} className="bg-[#433f92] text-white px-4 font-black text-xs uppercase border-2 border-transparent disabled:opacity-50">Log</button>
+                                    </div>
+                                </div>
+
+                                <div className="ml-auto">
+                                    <button onClick={handleBulkBan} disabled={selectedUsers.length===0} className="bg-red-600 text-white px-6 py-2 font-black text-xs uppercase tracking-widest border-2 border-transparent hover:bg-black disabled:opacity-50">
+                                        Ban Selected
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* The Spreadsheet */}
+                        <div className="overflow-x-auto border-4 border-black">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-black text-white uppercase text-xs tracking-widest">
+                                        {isPresident && <th className="p-3 border-r-2 border-gray-700 w-12 text-center"><input type="checkbox" onChange={toggleAll} className="accent-[#ec8b3f] w-4 h-4 cursor-pointer"/></th>}
+                                        <th className="p-3 border-r-2 border-gray-700">Name</th>
+                                        <th className="p-3 border-r-2 border-gray-700">Role</th>
+                                        <th className="p-3 border-r-2 border-gray-700">Sector</th>
+                                        <th className="p-3 border-r-2 border-gray-700">Status</th>
+                                        <th className="p-3">Contact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {targetProfiles.map((p, index) => {
+                                        const isSelected = selectedUsers.includes(p.userId);
+                                        return (
+                                            <tr key={p.id} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'} ${p.status === 'Removed' ? 'opacity-50' : ''}`}>
+                                                {isPresident && (
+                                                    <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isSelected}
+                                                            onChange={(e) => handleCheck(e, p.userId, index)}
+                                                            className="accent-[#ec8b3f] w-4 h-4 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                )}
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">{p.name}</td>
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-black text-[#ec8b3f] tracking-widest uppercase">{p.role}</td>
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-mono font-bold">{p.sector}</td>
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700">
+                                                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 ${p.status === 'Removed' ? 'bg-red-600 text-white' : 'bg-green-200 text-green-800'}`}>
+                                                        {p.status}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3">
+                                                    <button onClick={() => handleSendEmail(p.email, "KhaSu Interact Update", "")} className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:underline hover:text-black">
+                                                        {p.email}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                            {targetProfiles.length === 0 && <p className="p-6 text-center font-mono text-sm text-gray-500">No members found.</p>}
                         </div>
                     </div>
                 </div>
@@ -1312,11 +1482,27 @@ Your membership in the KhaSu Interact Club has been formally terminated. You no 
             const [skills, setSkills] = useState(profile.skills || '');
             const [msg, setMsg] = useState('');
             
+            // Password State
+            const [newPassword, setNewPassword] = useState('');
+            const [pwdMsg, setPwdMsg] = useState('');
+
             const handleSave = async (e) => {
                 e.preventDefault();
                 await db.collection('profiles').doc(profile.userId).update({ avatar, hobbies, skills });
                 setMsg("Profile updated successfully!");
                 setTimeout(() => setMsg(''), 3000);
+            };
+
+            const handlePasswordChange = async (e) => {
+                e.preventDefault();
+                try {
+                    await auth.currentUser.updatePassword(newPassword);
+                    setPwdMsg("Password securely updated.");
+                    setNewPassword('');
+                } catch (err) {
+                    setPwdMsg(err.message);
+                }
+                setTimeout(() => setPwdMsg(''), 5000);
             };
 
             return (
@@ -1358,6 +1544,15 @@ Your membership in the KhaSu Interact Club has been formally terminated. You no 
                                 </button>
                             </div>
                         </form>
+
+                        <div className="mt-8 border-4 border-black p-6 bg-gray-50 dark:bg-gray-900 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
+                            <h3 className="text-2xl font-black mb-4 flex items-center gap-2 uppercase tracking-tighter border-b-2 border-black pb-2"><Lock size={24}/> Security</h3>
+                            {pwdMsg && <div className="mb-4 p-3 bg-black text-white font-bold text-xs uppercase border-2 border-[#ec8b3f]">{pwdMsg}</div>}
+                            <form onSubmit={handlePasswordChange} className="flex flex-col sm:flex-row gap-4">
+                                <input type="password" minLength="6" required value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="New Password (min 6 chars)" className="flex-1 border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono text-sm" />
+                                <button type="submit" className="bg-black text-white hover:bg-[#ec8b3f] hover:text-black px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Update Key</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             );
