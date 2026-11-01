@@ -66,7 +66,7 @@
         import { 
             ShieldAlert, Calendar, Clock, DollarSign, 
             CheckCircle, XCircle, LogOut, CheckSquare, 
-            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock
+            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock, Instagram, MessageSquare, Phone
         } from 'lucide-react';
 
         // ==========================================
@@ -132,6 +132,7 @@
             const [sidebarOpen, setSidebarOpen] = useState(true);
             const [darkMode, setDarkMode] = useState(false);
             const [showTreasuryModal, setShowTreasuryModal] = useState(false);
+            const [showFeedbackModal, setShowFeedbackModal] = useState(false);
             const [themeTransition, setThemeTransition] = useState(null);
 
             // 1. Auth Listener
@@ -215,7 +216,7 @@
             const navItems = [
                 { id: 'dashboard', label: 'Dashboard', Icon: CheckSquare },
                 { id: 'events', label: 'Events & Roles', Icon: Calendar },
-                { id: 'hours', label: 'Time Tracking', Icon: Clock },
+                ...(!isPresident ? [{ id: 'hours', label: 'Time Tracking', Icon: Clock }] : []),
                 { id: 'reminders', label: 'My Reminders', Icon: Bell },
                 ...(!isPresident ? [{ id: 'reports', label: 'Report Center', Icon: Flag }] : []),
                 ...((isPresident || isHead) ? [{ id: 'admin', label: 'Administration', Icon: ShieldAlert }] : [])
@@ -274,6 +275,15 @@
                                     ))}
                                 </div>
                             </div>
+                            
+                            <div className="px-4 py-2 border-t-2 border-gray-900 dark:border-gray-200 flex flex-col gap-2">
+                                <a href="https://www.instagram.com/orkhonkhasu_interactclub_?utm_source=ig_web_button_share_sheet&mdxt=ZDNlZDc0MzIxNw==" target="_blank" rel="noopener noreferrer" className={`p-2 brutal-border bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white uppercase text-xs font-black flex items-center justify-center gap-2 ${!sidebarOpen ? 'px-0' : ''}`} title="Instagram">
+                                    <Instagram size={16} /> {sidebarOpen && <span>Instagram</span>}
+                                </a>
+                                <button onClick={() => setShowFeedbackModal(true)} className={`p-2 brutal-border bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white uppercase text-xs font-black flex items-center justify-center gap-2 ${!sidebarOpen ? 'px-0' : ''}`} title="Feedback to Devs">
+                                    <MessageSquare size={16} /> {sidebarOpen && <span>Feedback</span>}
+                                </button>
+                            </div>
 
                             <div 
                                 onClick={() => setActiveTab('profile')}
@@ -282,11 +292,11 @@
                             >
                                 <div className={`flex items-center ${sidebarOpen ? 'gap-3' : 'justify-center'} `}>
                                     <div className="w-10 h-10 rounded-none bg-black border-2 border-white text-white flex items-center justify-center font-bold overflow-hidden shrink-0">
-                                        {profile.avatar ? <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover"/> : profile.name.charAt(0)}
+                                        {profile.avatar ? <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover"/> : (profile.nickname ? profile.nickname.charAt(0) : profile.name.charAt(0))}
                                     </div>
                                     {sidebarOpen && (
                                         <div className="overflow-hidden">
-                                            <p className="font-bold text-sm truncate">{profile.name}</p>
+                                            <p className="font-bold text-sm truncate">{profile.nickname || profile.name}</p>
                                             <p className="text-[10px] font-black truncate uppercase opacity-80">{profile.role}</p>
                                         </div>
                                     )}
@@ -314,11 +324,11 @@
 
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
-                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} />}
+                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} isPresident={isPresident} isHead={isHead} />}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
                                 {activeTab === 'reminders' && <RemindersView reminders={reminders} profile={profile} />}
                                 {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} />}
-                                {activeTab === 'hours' && <HoursView hours={hours} profile={profile} isPresident={isPresident} isHead={isHead} profiles={profiles} />}
+                                {activeTab === 'hours' && !isPresident && <HoursView hours={hours} profile={profile} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
                                 {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} />}
                             </main>
@@ -326,35 +336,37 @@
                         </div>
                     </div>
 
-                    {/* Treasury Modal (For President/Finance) */}
+                    {/* Modals */}
                     {showTreasuryModal && canModifyTreasury && (
-                        <TreasuryModal 
-                            onClose={() => setShowTreasuryModal(false)} 
-                            profile={profile} balance={currentBalance} treasuryRecords={treasury}
-                        />
+                        <TreasuryModal onClose={() => setShowTreasuryModal(false)} profile={profile} balance={currentBalance} treasuryRecords={treasury} />
+                    )}
+                    {showFeedbackModal && (
+                        <FeedbackModal onClose={() => setShowFeedbackModal(false)} profile={profile} />
                     )}
                 </div>
             );
         }
 
         // ==========================================
-        // DYNAMIC BACKGROUND FX
+        // DYNAMIC BACKGROUND FX (Optimized for performance)
         // ==========================================
         function BackgroundFX({ darkMode }) {
-            const [mousePos, setMousePos] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+            const glow1Ref = useRef(null);
+            const glow2Ref = useRef(null);
 
             useEffect(() => {
-                let animationFrameId;
                 const handleMouseMove = (e) => {
-                    animationFrameId = requestAnimationFrame(() => {
-                        setMousePos({ x: e.clientX, y: e.clientY });
+                    requestAnimationFrame(() => {
+                        if (glow1Ref.current) {
+                            glow1Ref.current.style.transform = `translate(${e.clientX - (window.innerWidth*0.3)}px, ${e.clientY - (window.innerWidth*0.3)}px)`;
+                        }
+                        if (glow2Ref.current) {
+                            glow2Ref.current.style.transform = `translate(${e.clientX - (window.innerWidth*0.2) + 100}px, ${e.clientY - (window.innerWidth*0.2) - 100}px)`;
+                        }
                     });
                 };
                 window.addEventListener('mousemove', handleMouseMove);
-                return () => {
-                    window.removeEventListener('mousemove', handleMouseMove);
-                    cancelAnimationFrame(animationFrameId);
-                };
+                return () => window.removeEventListener('mousemove', handleMouseMove);
             }, []);
 
             return (
@@ -362,19 +374,21 @@
                     <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA0MCAwIEwgMCAwIDAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgwLDAsMCwwLjA1KSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] dark:bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA0MCAwIEwgMCAwIDAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjA1KSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-50"></div>
                     
                     <div 
-                        className="absolute rounded-full blur-[100px] opacity-75 dark:opacity-50 transition-transform duration-1000 ease-out saturate-200"
+                        ref={glow1Ref}
+                        className="absolute rounded-full blur-[100px] opacity-75 dark:opacity-50 transition-transform duration-100 ease-out saturate-200"
                         style={{ 
                             width: '60vw', height: '60vw',
                             background: 'radial-gradient(circle, #433f92 0%, transparent 70%)',
-                            transform: `translate(${mousePos.x - (window.innerWidth*0.3)}px, ${mousePos.y - (window.innerWidth*0.3)}px)`
+                            willChange: 'transform'
                         }}
                     />
                     <div 
-                        className="absolute rounded-full blur-[80px] opacity-60 dark:opacity-30 transition-transform duration-[1500ms] ease-out delay-75 saturate-200"
+                        ref={glow2Ref}
+                        className="absolute rounded-full blur-[80px] opacity-60 dark:opacity-30 transition-transform duration-150 ease-out saturate-200"
                         style={{ 
                             width: '40vw', height: '40vw',
                             background: 'radial-gradient(circle, #ec8b3f 0%, transparent 70%)',
-                            transform: `translate(${mousePos.x - (window.innerWidth*0.2) + 100}px, ${mousePos.y - (window.innerWidth*0.2) - 100}px)`
+                            willChange: 'transform'
                         }}
                     />
                 </div>
@@ -390,6 +404,8 @@
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [name, setName] = useState('');
+            const [phone, setPhone] = useState('');
+            const [schoolClass, setSchoolClass] = useState('');
             const [role, setRole] = useState(ROLES.MEMBER);
             const [sector, setSector] = useState(SECTORS[0]);
             const [loading, setLoading] = useState(false);
@@ -432,6 +448,7 @@
                         }
                         const exists = profiles.some(p => p.email === email);
                         if (exists) throw new Error("Email already registered. Please login.");
+                        if (!phone || !schoolClass) throw new Error("Phone and Class are required.");
                         
                         // Create Auth User
                         const cred = await auth.createUserWithEmailAndPassword(email, password);
@@ -439,7 +456,7 @@
                         // Create Profile in Firestore
                         await db.collection('profiles').doc(cred.user.uid).set({
                             userId: cred.user.uid,
-                            name, email, role, sector, status: 'Active', joinedAt: Date.now()
+                            name, nickname: '', email, phone, schoolClass, role, sector, status: 'Active', joinedAt: Date.now()
                         });
 
                     } else {
@@ -455,7 +472,7 @@
 
             return (
                 <div className="min-h-screen bg-[#F4F4F0] flex items-center justify-center p-6 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA0MCAwIEwgMCAwIDAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgwLDAsMCwwLjA1KSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]">
-                    <div className="bg-white p-8 border-4 border-black w-full max-w-md shadow-[12px_12px_0px_0px_#433f92] animate-fade-in-up">
+                    <div className="bg-white p-8 border-4 border-black w-full max-w-md shadow-[12px_12px_0px_0px_#433f92] animate-fade-in-up max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <h1 className="text-3xl font-black mb-2 text-[#433f92] uppercase tracking-tighter">KhaSu Interact</h1>
                         <p className="text-sm font-bold text-gray-500 mb-8 border-b-2 border-black pb-4 uppercase tracking-widest">
                             {isLogin ? 'Establish Identity' : 'Submit Application'}
@@ -482,20 +499,32 @@
                             </div>
 
                             {!isLogin && (
-                                <div className="flex gap-3">
-                                    <div className="flex-1">
-                                        <label className="block text-xs uppercase font-black text-black mb-1">Role</label>
-                                        <select value={role} onChange={handleRoleChange} className="w-full border-2 border-gray-300 rounded-none p-3 outline-none font-bold uppercase text-xs cursor-pointer focus:border-[#433f92]">
-                                            {Object.values(ROLES).map(r => <option key={r} value={r}>{r}</option>)}
-                                        </select>
+                                <>
+                                    <div className="flex gap-3">
+                                        <div className="flex-1">
+                                            <label className="block text-xs uppercase font-black text-black mb-1">Phone Number</label>
+                                            <input required type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="e.g., 99112233" className="w-full border-2 border-gray-300 rounded-none p-3 outline-none focus:border-[#433f92] font-mono text-sm" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-xs uppercase font-black text-black mb-1">Class</label>
+                                            <input required type="text" value={schoolClass} onChange={e=>setSchoolClass(e.target.value)} placeholder="e.g., 11A" className="w-full border-2 border-gray-300 rounded-none p-3 outline-none focus:border-[#433f92] font-bold uppercase text-sm" />
+                                        </div>
                                     </div>
-                                    <div className="flex-1">
-                                        <label className="block text-xs uppercase font-black text-black mb-1">Sector</label>
-                                        <select value={sector} onChange={(e) => setSector(e.target.value)} className={`w-full border-2 border-gray-300 rounded-none p-3 outline-none font-bold uppercase text-xs focus:border-[#433f92] ${role !== ROLES.MEMBER ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'cursor-pointer'}`} disabled={role !== ROLES.MEMBER}>
-                                            {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
-                                        </select>
+                                    <div className="flex gap-3">
+                                        <div className="flex-1">
+                                            <label className="block text-xs uppercase font-black text-black mb-1">Role</label>
+                                            <select value={role} onChange={handleRoleChange} className="w-full border-2 border-gray-300 rounded-none p-3 outline-none font-bold uppercase text-xs cursor-pointer focus:border-[#433f92]">
+                                                {Object.values(ROLES).map(r => <option key={r} value={r}>{r}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-xs uppercase font-black text-black mb-1">Sector</label>
+                                            <select value={sector} onChange={(e) => setSector(e.target.value)} className={`w-full border-2 border-gray-300 rounded-none p-3 outline-none font-bold uppercase text-xs focus:border-[#433f92] ${role !== ROLES.MEMBER ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'cursor-pointer'}`} disabled={role !== ROLES.MEMBER}>
+                                                {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
                                     </div>
-                                </div>
+                                </>
                             )}
 
                             <div className="flex items-center gap-2 mt-2">
@@ -708,7 +737,7 @@
         }
 
         // --- DASHBOARD VIEW ---
-        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news, reminders }) {
+        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news, reminders, isPresident, isHead }) {
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
@@ -723,6 +752,31 @@
             const [newsText, setNewsText] = useState('');
             const [newsImage, setNewsImage] = useState(null);
             
+            // President Notification & Pending Approvals
+            const pendingHours = hours.filter(h => h.status === 'Pending');
+            const prevPendingCount = useRef(pendingHours.length);
+
+            useEffect(() => {
+                if (isPresident && "Notification" in window) {
+                    Notification.requestPermission();
+                }
+            }, [isPresident]);
+
+            useEffect(() => {
+                if (isPresident && pendingHours.length > prevPendingCount.current) {
+                    if (Notification.permission === "granted") {
+                        new Notification("KhaSu Interact Portal", {
+                            body: "A member has submitted new volunteer hours for approval."
+                        });
+                    }
+                }
+                prevPendingCount.current = pendingHours.length;
+            }, [pendingHours.length, isPresident]);
+
+            const handleApproveHour = async (id) => {
+                await db.collection('hours').doc(id).update({ status: 'Approved' });
+            };
+
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if(!file) return;
@@ -765,6 +819,24 @@
                 <div className="space-y-8 animate-fade-in-up">
                     <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-[#ec8b3f] pl-4">Overview</h1>
                     
+                    {/* PRESIDENT PENDING HOURS ALERT BLOCK */}
+                    {(isPresident || isHead) && pendingHours.length > 0 && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border-4 border-amber-500 p-6 shadow-[8px_8px_0px_0px_#f59e0b]">
+                            <h2 className="text-xl font-black uppercase tracking-widest mb-4 text-amber-700 dark:text-amber-500">Action Required: Pending Approvals</h2>
+                            <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
+                                {pendingHours.map(h => (
+                                    <div key={h.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 border-2 border-amber-500">
+                                        <div>
+                                            <p className="font-bold">{h.userName} <span className="text-amber-600">({h.amount} hrs)</span></p>
+                                            <p className="text-sm text-gray-500 font-mono">{h.description}</p>
+                                        </div>
+                                        <button onClick={() => handleApproveHour(h.id)} className="bg-amber-500 hover:bg-black text-white px-4 py-2 font-black uppercase text-xs tracking-widest transition-colors border-2 border-transparent">Approve</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-[#433f92] p-6 border-4 border-black text-white shadow-[8px_8px_0px_0px_#000]">
                             <p className="text-xs uppercase font-black tracking-widest mb-2 opacity-80">Your Hours</p>
@@ -790,7 +862,7 @@
                                     <Flag size={24} /> Club Announcements
                                 </h2>
                                 
-                                {profile.role === ROLES.PRESIDENT && (
+                                {isPresident && (
                                     <form onSubmit={handlePostNews} className="mb-8 border-4 border-[#433f92] p-4 bg-gray-50 dark:bg-gray-900">
                                         <textarea value={newsText} onChange={e=>setNewsText(e.target.value)} placeholder="Share news, updates, or reports..." className="w-full bg-white dark:bg-gray-800 border-2 border-black p-3 outline-none font-mono text-sm h-24 mb-4"></textarea>
                                         {newsImage && (
@@ -1153,8 +1225,8 @@
         }
 
         // --- HOURS VIEW ---
-        function HoursView({ hours, profile, isPresident, isHead, profiles }) {
-            const pendingHours = hours.filter(h => h.status === 'Pending');
+        function HoursView({ hours, profile, profiles }) {
+            const pendingHours = hours.filter(h => h.status === 'Pending' && h.userId === profile.userId);
             const myHours = hours.filter(h => h.userId === profile.userId);
 
             const [amount, setAmount] = useState('');
@@ -1174,28 +1246,22 @@
                 setAmount(''); setDesc('');
             };
 
-            const handleApprove = async (id) => {
-                await db.collection('hours').doc(id).update({ status: 'Approved' });
-            };
-
             return (
                 <div className="space-y-8 animate-fade-in-up">
                     <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-[#ec8b3f] pl-4">Time Tracking</h1>
 
-                    {!isPresident && (
-                        <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92]">
-                            <h2 className="text-xl font-black uppercase tracking-widest mb-4">Log Hours</h2>
-                            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
-                                <input type="number" required min="0.5" step="0.5" placeholder="Hours" value={amount} onChange={e=>setAmount(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono font-bold w-full sm:w-1/4" />
-                                <input type="text" required placeholder="Description (e.g., Park Cleanup)" value={desc} onChange={e=>setDesc(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold flex-1" />
-                                <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Submit</button>
-                            </form>
-                        </div>
-                    )}
+                    <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92]">
+                        <h2 className="text-xl font-black uppercase tracking-widest mb-4">Log Hours</h2>
+                        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
+                            <input type="number" required min="0.5" step="0.5" placeholder="Hours" value={amount} onChange={e=>setAmount(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono font-bold w-full sm:w-1/4" />
+                            <input type="text" required placeholder="Description (e.g., Park Cleanup)" value={desc} onChange={e=>setDesc(e.target.value)} className="border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold flex-1" />
+                            <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Submit</button>
+                        </form>
+                    </div>
 
-                    {(isPresident || isHead) && pendingHours.length > 0 && (
+                    {pendingHours.length > 0 && (
                         <div className="bg-amber-50 dark:bg-amber-900/20 border-4 border-amber-500 p-6">
-                            <h2 className="text-xl font-black uppercase tracking-widest mb-4 text-amber-700 dark:text-amber-500">Pending Approvals</h2>
+                            <h2 className="text-xl font-black uppercase tracking-widest mb-4 text-amber-700 dark:text-amber-500">Your Pending Approvals</h2>
                             <div className="space-y-3">
                                 {pendingHours.map(h => (
                                     <div key={h.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 border-2 border-amber-500">
@@ -1203,7 +1269,7 @@
                                             <p className="font-bold">{h.userName} - {h.amount} hrs</p>
                                             <p className="text-sm text-gray-500">{h.description}</p>
                                         </div>
-                                        <button onClick={() => handleApprove(h.id)} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 font-black uppercase text-xs tracking-widest">Approve</button>
+                                        <span className="text-xs font-black uppercase tracking-widest px-2 py-1 bg-amber-100 text-amber-700">Pending</span>
                                     </div>
                                 ))}
                             </div>
@@ -1431,6 +1497,7 @@ KhaSu Interact Club`;
                                         <th className="p-3 border-r-2 border-gray-700">Name</th>
                                         <th className="p-3 border-r-2 border-gray-700">Role</th>
                                         <th className="p-3 border-r-2 border-gray-700">Sector</th>
+                                        <th className="p-3 border-r-2 border-gray-700">Phone & Class</th>
                                         <th className="p-3 border-r-2 border-gray-700">Status</th>
                                         <th className="p-3">Contact</th>
                                     </tr>
@@ -1450,9 +1517,13 @@ KhaSu Interact Club`;
                                                         />
                                                     </td>
                                                 )}
-                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">{p.name}</td>
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">{p.name} {p.nickname && <span className="text-gray-500">({p.nickname})</span>}</td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-black text-[#ec8b3f] tracking-widest uppercase">{p.role}</td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-mono font-bold">{p.sector}</td>
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-mono">
+                                                    <div>📞 {p.phone || 'N/A'}</div>
+                                                    <div>🏫 {p.schoolClass || 'N/A'}</div>
+                                                </td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700">
                                                     <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 ${p.status === 'Removed' ? 'bg-red-600 text-white' : 'bg-green-200 text-green-800'}`}>
                                                         {p.status}
@@ -1477,6 +1548,8 @@ KhaSu Interact Club`;
 
         // --- PROFILE VIEW ---
         function ProfileView({ profile, onLogout }) {
+            const [name, setName] = useState(profile.name || '');
+            const [nickname, setNickname] = useState(profile.nickname || '');
             const [avatar, setAvatar] = useState(profile.avatar || '');
             const [hobbies, setHobbies] = useState(profile.hobbies || '');
             const [skills, setSkills] = useState(profile.skills || '');
@@ -1488,7 +1561,7 @@ KhaSu Interact Club`;
 
             const handleSave = async (e) => {
                 e.preventDefault();
-                await db.collection('profiles').doc(profile.userId).update({ avatar, hobbies, skills });
+                await db.collection('profiles').doc(profile.userId).update({ name, nickname, avatar, hobbies, skills });
                 setMsg("Profile updated successfully!");
                 setTimeout(() => setMsg(''), 3000);
             };
@@ -1516,13 +1589,28 @@ KhaSu Interact Club`;
 
                         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="md:col-span-2 flex items-center gap-6 border-b-2 border-dashed border-black pb-6">
-                                <div className="w-24 h-24 bg-gray-100 border-2 border-black flex items-center justify-center overflow-hidden shrink-0">
-                                    {avatar ? <img src={avatar} alt="avatar" className="w-full h-full object-cover"/> : <ImageIcon size={32} className="text-gray-400" />}
+                                <div className="w-24 h-24 bg-gray-100 border-2 border-black flex items-center justify-center overflow-hidden shrink-0 font-black text-4xl">
+                                    {avatar ? <img src={avatar} alt="avatar" className="w-full h-full object-cover"/> : (nickname ? nickname.charAt(0).toUpperCase() : name.charAt(0).toUpperCase())}
                                 </div>
                                 <div className="flex-1">
                                     <label className="block text-xs uppercase font-black text-black dark:text-white mb-2">Avatar Image URL</label>
                                     <input type="text" value={avatar} onChange={e=>setAvatar(e.target.value)} placeholder="https://..." className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono text-sm" />
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs uppercase font-black text-black dark:text-white mb-2">Full Name</label>
+                                <input required type="text" value={name} onChange={e=>setName(e.target.value)} className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold text-sm" />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs uppercase font-black text-black dark:text-white mb-2">Nickname</label>
+                                <input type="text" value={nickname} onChange={e=>setNickname(e.target.value)} placeholder="Optional" className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold text-sm" />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <label className="block text-xs uppercase font-black text-black dark:text-white mb-2">Email Address (Locked)</label>
+                                <input type="text" disabled value={profile.email} className="w-full border-2 border-gray-400 bg-gray-200 dark:bg-gray-800 text-gray-500 p-3 font-mono text-sm cursor-not-allowed" />
                             </div>
 
                             <div>
@@ -1559,6 +1647,39 @@ KhaSu Interact Club`;
         }
 
         // --- MODALS ---
+        function FeedbackModal({ onClose, profile }) {
+            const [text, setText] = useState('');
+            const [status, setStatus] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setStatus('Sending...');
+                await db.collection('feedbacks').add({
+                    text, authorId: profile.userId, authorName: profile.name, timestamp: Date.now()
+                });
+                alert('Feedback sent to the developers. Thank you!');
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-[#f4f4f0] dark:bg-gray-900 border-4 border-black w-full max-w-lg shadow-[15px_15px_0px_0px_#ec8b3f] animate-fade-in-up">
+                        <div className="p-4 bg-black text-white flex justify-between items-center border-b-4 border-black">
+                            <h2 className="font-black text-xl uppercase tracking-tighter flex items-center gap-2"><MessageSquare size={20}/> Send Feedback</h2>
+                            <button onClick={onClose} className="p-1 hover:text-[#ec8b3f] transition-colors"><XCircle size={24}/></button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="p-6">
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Report bugs or request new features directly to the admin/dev team.</p>
+                            <textarea required value={text} onChange={e=>setText(e.target.value)} placeholder="Describe the issue or idea..." className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-800 p-3 outline-none font-mono text-sm h-32 mb-4"></textarea>
+                            <button type="submit" disabled={!!status} className="w-full bg-[#433f92] hover:bg-black text-white p-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent disabled:opacity-50">
+                                {status || 'Submit to Devs'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
         function TreasuryModal({ onClose, profile, balance, treasuryRecords }) {
             const [amount, setAmount] = useState('');
             const [desc, setDesc] = useState('');
