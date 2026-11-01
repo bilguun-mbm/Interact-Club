@@ -204,12 +204,6 @@
                 const targetDocId = targetProfile.id || targetProfile.userId;
                 const targetName = targetProfile.name || 'this member';
 
-                // Prevent self-deletion
-                if (targetUserId === profile?.userId || targetDocId === profile?.userId) {
-                    alert("Operation aborted: You cannot delete your own currently logged-in account.");
-                    return;
-                }
-
                 if (!silent) {
                     const confirmMsg = `PERMANENT DELETION WARNING:\n\nAre you sure you want to completely erase ${targetName} from the database?\n\nThis will purge their profile, service hours, pitch proposals, event registrations, and report mentions with NO TRACE.\n\nThis action cannot be undone.`;
                     if (!window.confirm(confirmMsg)) return;
@@ -416,58 +410,14 @@
 
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
-                                {activeTab === 'dashboard' && (
-                                    <DashboardView 
-                                        treasury={currentBalance} 
-                                        hours={hours} 
-                                        profiles={profiles} 
-                                        profile={profile} 
-                                        events={events} 
-                                        eventRecruitments={eventRecruitments} 
-                                        news={news} 
-                                        reminders={reminders} 
-                                        isPresident={isPresident} 
-                                        isHead={isHead} 
-                                        onOpenMemberProfile={setViewingMemberProfile} 
-                                    />
-                                )}
-                                {activeTab === 'members' && (
-                                    <MembersDirectoryView 
-                                        profiles={profiles} 
-                                        hours={hours} 
-                                        onOpenMemberProfile={setViewingMemberProfile} 
-                                        isPresident={isPresident} 
-                                        onDeleteMember={deleteMemberPermanently} 
-                                        currentUser={profile} 
-                                    />
-                                )}
+                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} isPresident={isPresident} isHead={isHead} onOpenMemberProfile={setViewingMemberProfile} />}
+                                {activeTab === 'members' && <MembersDirectoryView profiles={profiles} hours={hours} onOpenMemberProfile={setViewingMemberProfile} isPresident={isPresident} onDeleteMember={deleteMemberPermanently} />}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
                                 {activeTab === 'reminders' && <RemindersView reminders={reminders} profile={profile} />}
-                                {activeTab === 'events' && (
-                                    <EventsView 
-                                        events={events} 
-                                        eventIdeas={eventIdeas} 
-                                        profile={profile} 
-                                        isPresident={isPresident} 
-                                        isHead={isHead} 
-                                        eventRecruitments={eventRecruitments} 
-                                        profiles={profiles} 
-                                        onOpenMemberProfile={setViewingMemberProfile} 
-                                    />
-                                )}
+                                {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} profiles={profiles} onOpenMemberProfile={setViewingMemberProfile} />}
                                 {activeTab === 'hours' && !isPresident && <HoursView hours={hours} profile={profile} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
-                                {activeTab === 'admin' && (isPresident || isHead) && (
-                                    <AdminView 
-                                        profiles={profiles} 
-                                        isPresident={isPresident} 
-                                        reports={reports} 
-                                        currentUser={profile} 
-                                        eventRecruitments={eventRecruitments} 
-                                        onOpenMemberProfile={setViewingMemberProfile} 
-                                        onDeleteMember={deleteMemberPermanently} 
-                                    />
-                                )}
+                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} onOpenMemberProfile={setViewingMemberProfile} onDeleteMember={deleteMemberPermanently} />}
                             </main>
 
                         </div>
@@ -487,7 +437,6 @@
                             onClose={() => setViewingMemberProfile(null)} 
                             isPresident={isPresident}
                             onDeleteMember={deleteMemberPermanently}
-                            currentUser={profile}
                         />
                     )}
                 </div>
@@ -550,7 +499,7 @@
         // ==========================================
         // MEMBERS DIRECTORY & COMPLETE PROFILE VIEW
         // ==========================================
-        function MembersDirectoryView({ profiles, hours, onOpenMemberProfile, isPresident, onDeleteMember, currentUser }) {
+        function MembersDirectoryView({ profiles, hours, onOpenMemberProfile, isPresident, onDeleteMember }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedSector, setSelectedSector] = useState('All');
 
@@ -619,8 +568,6 @@
                                 .filter(h => h.userId === m.userId && h.status === 'Approved')
                                 .reduce((acc, h) => acc + Number(h.amount), 0);
 
-                            const isSelf = (m.userId === currentUser?.userId || m.id === currentUser?.userId);
-
                             return (
                                 <div 
                                     key={m.id || m.userId}
@@ -646,8 +593,8 @@
                                                 </div>
                                             </div>
 
-                                            {/* PRESIDENT EXCLUSIVE PURGE BUTTON (Allows deleting trial president accounts, protects only self) */}
-                                            {isPresident && !isSelf && (
+                                            {/* PRESIDENT EXCLUSIVE PURGE BUTTON */}
+                                            {isPresident && m.role !== ROLES.PRESIDENT && (
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -697,13 +644,12 @@
         }
 
         // --- COMPLETE MEMBER DOSSIER / PROFILE MODAL ---
-        function MemberProfileModal({ profile, hours, onClose, isPresident, onDeleteMember, currentUser }) {
+        function MemberProfileModal({ profile, hours, onClose, isPresident, onDeleteMember }) {
             const userApprovedHours = hours
                 .filter(h => h.userId === profile.userId && h.status === 'Approved')
                 .reduce((acc, h) => acc + Number(h.amount), 0);
 
             const userApprovedList = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
-            const isSelf = (profile.userId === currentUser?.userId || profile.id === currentUser?.userId);
 
             return (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
@@ -716,7 +662,7 @@
                                 <h2 className="font-black text-2xl uppercase tracking-tighter truncate">{profile.name}</h2>
                             </div>
                             <div className="flex items-center gap-3">
-                                {isPresident && !isSelf && (
+                                {isPresident && profile.role !== ROLES.PRESIDENT && (
                                     <button 
                                         onClick={() => onDeleteMember(profile)} 
                                         className="px-3 py-1.5 bg-red-600 hover:bg-black text-white text-xs font-black uppercase tracking-widest border-2 border-white flex items-center gap-1.5 transition-colors shadow-[2px_2px_0px_0px_#fff]"
@@ -844,7 +790,9 @@
             );
         }
 
-        // --- IDENTITY GATE & REGISTRATION ---
+        // ==========================================
+        // IDENTITY GATE & REGISTRATION
+        // ==========================================
         function IdentityGate({ profiles }) {
             const [isLogin, setIsLogin] = useState(true);
             const [email, setEmail] = useState('');
@@ -1844,8 +1792,8 @@
             const [bulkSector, setBulkSector] = useState('');
             const [bulkHours, setBulkHours] = useState('');
 
-            // Hide revoked members from the administrative spreadsheet
-            const targetProfiles = profiles.filter(p => !isRevoked(p));
+            // Hide revoked members and filter out other Presidents from mass editing
+            const targetProfiles = profiles.filter(p => !isRevoked(p) && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
 
             const handleSendEmail = (targetEmail, subject, body) => {
                 window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}
@@ -1879,7 +1827,7 @@ KhaSu Interact Club`;
             };
 
             const toggleAll = (e) => {
-                if (e.target.checked) setSelectedUsers(targetProfiles.map(p => p.userId).filter(uid => uid !== currentUser.userId));
+                if (e.target.checked) setSelectedUsers(targetProfiles.map(p => p.userId));
                 else setSelectedUsers([]);
             };
 
@@ -1888,7 +1836,6 @@ KhaSu Interact Club`;
                 if (!window.confirm(`Revoke portal access for ${selectedUsers.length} selected users?`)) return;
                 
                 for (const uid of selectedUsers) {
-                    if (uid === currentUser.userId) continue;
                     const target = profiles.find(p => p.userId === uid || p.id === uid);
                     const docId = target?.id || uid;
                     await db.collection('profiles').doc(docId).update({ status: 'Removed' });
@@ -1906,11 +1853,10 @@ KhaSu Interact Club`;
             // PERMANENT PURGE (PRESIDENT ONLY, DELETES WITH NO TRACE)
             const handleBulkPurge = async () => {
                 if (!isPresident) return;
-                const filteredUsers = selectedUsers.filter(uid => uid !== currentUser.userId);
-                const confirmMsg = `PERMANENT MASS PURGE WARNING:\n\nAre you sure you want to completely erase ${filteredUsers.length} selected member(s) from the portal with NO TRACE?\n\nThis will purge all their records, hours, applications, and documents from Firebase immediately.`;
+                const confirmMsg = `PERMANENT MASS PURGE WARNING:\n\nAre you sure you want to completely erase ${selectedUsers.length} selected member(s) from the portal with NO TRACE?\n\nThis will purge all their records, hours, applications, and documents from Firebase immediately.`;
                 if (!window.confirm(confirmMsg)) return;
 
-                for (const uid of filteredUsers) {
+                for (const uid of selectedUsers) {
                     const target = profiles.find(p => p.userId === uid || p.id === uid);
                     if (target) {
                         await onDeleteMember(target, true);
@@ -2027,19 +1973,16 @@ KhaSu Interact Club`;
                                 <tbody>
                                     {targetProfiles.map((p, index) => {
                                         const isSelected = selectedUsers.includes(p.userId);
-                                        const isSelf = (p.userId === currentUser.userId || p.id === currentUser.userId);
                                         return (
                                             <tr key={p.id || p.userId} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                                                 {isPresident && (
                                                     <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-center">
-                                                        {!isSelf && (
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={isSelected}
-                                                                onChange={(e) => handleCheck(e, p.userId, index)}
-                                                                className="accent-[#ec8b3f] w-4 h-4 cursor-pointer"
-                                                            />
-                                                        )}
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isSelected}
+                                                            onChange={(e) => handleCheck(e, p.userId, index)}
+                                                            className="accent-[#ec8b3f] w-4 h-4 cursor-pointer"
+                                                        />
                                                     </td>
                                                 )}
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">
@@ -2069,7 +2012,7 @@ KhaSu Interact Club`;
                                                 </td>
                                                 {isPresident && (
                                                     <td className="p-3 text-center">
-                                                        {!isSelf && (
+                                                        {p.role !== ROLES.PRESIDENT && (
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
