@@ -37,7 +37,7 @@
         .animate-fade-in-up { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     </style>
 
-    <!-- Firebase Compat SDKs (Stable for single-file HTML) -->
+    <!-- Firebase Compat SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -66,11 +66,11 @@
         import { 
             ShieldAlert, Calendar, Clock, DollarSign, 
             CheckCircle, XCircle, LogOut, CheckSquare, 
-            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon
+            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save
         } from 'lucide-react';
 
         // ==========================================
-        // 1. PASTE YOUR FIREBASE CONFIG HERE
+        // 1. FIREBASE CONFIGURATION
         // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyCElkzEypV_0EhAewvqQtGZ9in1ER3T7M4",
@@ -124,6 +124,7 @@
             const [reports, setReports] = useState([]);
             const [eventIdeas, setEventIdeas] = useState([]);
             const [eventRecruitments, setEventRecruitments] = useState([]);
+            const [news, setNews] = useState([]);
 
             // UI State
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -166,6 +167,7 @@
                 unsubs.push(db.collection('reports').orderBy('timestamp', 'desc').onSnapshot(snap => setReports(mapSnap(snap))));
                 unsubs.push(db.collection('eventIdeas').orderBy('timestamp', 'desc').onSnapshot(snap => setEventIdeas(mapSnap(snap))));
                 unsubs.push(db.collection('eventRecruitments').orderBy('timestamp', 'desc').onSnapshot(snap => setEventRecruitments(mapSnap(snap))));
+                unsubs.push(db.collection('news').orderBy('timestamp', 'desc').onSnapshot(snap => setNews(mapSnap(snap))));
 
                 return () => unsubs.forEach(unsub => unsub());
             }, [user]);
@@ -309,7 +311,7 @@
 
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
-                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} />}
+                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} />}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
                                 {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} />}
                                 {activeTab === 'hours' && <HoursView hours={hours} profile={profile} isPresident={isPresident} isHead={isHead} profiles={profiles} />}
@@ -528,6 +530,10 @@
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedEvent, setSelectedEvent] = useState(null);
             
+            // Edit Recruitment State
+            const [editingRecId, setEditingRecId] = useState(null);
+            const [editRecForm, setEditRecForm] = useState({ roleName: '', capacity: '', potentialHours: '' });
+
             const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
             const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
 
@@ -555,6 +561,26 @@
                 await db.collection('eventRecruitments').doc(recruitment.id).update({ applicants: updatedApplicants });
                 alert("Applied successfully!");
                 setSelectedEvent(null);
+            };
+
+            const startEditRecruitment = (rec) => {
+                setEditingRecId(rec.id);
+                setEditRecForm({ roleName: rec.roleName, capacity: rec.capacity, potentialHours: rec.potentialHours });
+            };
+
+            const saveEditRecruitment = async (id) => {
+                await db.collection('eventRecruitments').doc(id).update({
+                    roleName: editRecForm.roleName,
+                    capacity: Number(editRecForm.capacity),
+                    potentialHours: Number(editRecForm.potentialHours)
+                });
+                setEditingRecId(null);
+            };
+
+            const deleteRecruitment = async (id) => {
+                if(window.confirm('Delete this role opportunity?')) {
+                    await db.collection('eventRecruitments').doc(id).delete();
+                }
             };
 
             return (
@@ -614,12 +640,37 @@
                                             const applicantCount = r.applicants ? r.applicants.length : 0;
                                             const isFull = applicantCount >= Number(r.capacity);
                                             const hasApplied = r.applicants && r.applicants.includes(profile.userId);
+                                            const canEdit = profile.role === ROLES.PRESIDENT || (profile.role.startsWith('Head') && profile.sector === r.sector) || profile.userId === r.authorId;
                                             
+                                            if (editingRecId === r.id) {
+                                                return (
+                                                    <div key={r.id} className="p-4 border-4 border-[#ec8b3f] bg-white dark:bg-gray-800">
+                                                        <input value={editRecForm.roleName} onChange={e=>setEditRecForm({...editRecForm, roleName: e.target.value})} className="w-full border-2 border-black p-2 mb-2 outline-none dark:bg-gray-700 text-sm font-black uppercase" placeholder="Role Title"/>
+                                                        <div className="flex gap-2 mb-2">
+                                                            <input type="number" value={editRecForm.capacity} onChange={e=>setEditRecForm({...editRecForm, capacity: e.target.value})} className="w-1/2 border-2 border-black p-2 outline-none dark:bg-gray-700 text-xs font-mono" placeholder="Capacity"/>
+                                                            <input type="number" step="0.5" value={editRecForm.potentialHours} onChange={e=>setEditRecForm({...editRecForm, potentialHours: e.target.value})} className="w-1/2 border-2 border-black p-2 outline-none dark:bg-gray-700 text-xs font-mono" placeholder="Hours"/>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => saveEditRecruitment(r.id)} className="flex-1 bg-green-500 text-white font-black text-xs uppercase p-2 border-2 border-black hover:bg-black">Save</button>
+                                                            <button onClick={() => setEditingRecId(null)} className="flex-1 bg-gray-300 text-black font-black text-xs uppercase p-2 border-2 border-black hover:bg-gray-400">Cancel</button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
                                             return (
                                                 <div key={r.id} className={`p-4 border-2 border-black ${isFull ? 'bg-gray-200 dark:bg-gray-800 opacity-60' : 'bg-white dark:bg-gray-700'}`}>
                                                     <div className="flex justify-between items-start mb-2">
                                                         <h4 className="font-black uppercase">{r.roleName}</h4>
-                                                        <span className="text-xs font-bold bg-[#ec8b3f] text-black px-2 py-1 uppercase">{r.potentialHours} Hrs</span>
+                                                        <div className="flex gap-2">
+                                                            {canEdit && (
+                                                                <div className="flex gap-1">
+                                                                    <button onClick={() => startEditRecruitment(r)} className="p-1 hover:text-blue-500"><Edit3 size={14}/></button>
+                                                                    <button onClick={() => deleteRecruitment(r.id)} className="p-1 hover:text-red-500"><Trash2 size={14}/></button>
+                                                                </div>
+                                                            )}
+                                                            <span className="text-xs font-bold bg-[#ec8b3f] text-black px-2 py-1 uppercase">{r.potentialHours} Hrs</span>
+                                                        </div>
                                                     </div>
                                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Sector: {r.sector}</p>
                                                     <div className="flex justify-between items-center">
@@ -648,7 +699,7 @@
         }
 
         // --- DASHBOARD VIEW ---
-        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments }) {
+        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news }) {
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
@@ -658,6 +709,48 @@
                 acc[h.userId].total += Number(h.amount);
                 return acc;
             }, {})).sort((a,b) => b.total - a.total).slice(0, 5);
+
+            // News Feed State
+            const [newsText, setNewsText] = useState('');
+            const [newsImage, setNewsImage] = useState(null);
+            
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800;
+                        let scale = 1;
+                        if (img.width > MAX_WIDTH) scale = MAX_WIDTH / img.width;
+                        canvas.width = img.width * scale;
+                        canvas.height = img.height * scale;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        setNewsImage(canvas.toDataURL('image/jpeg', 0.6)); // Compressed Base64
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const handlePostNews = async (e) => {
+                e.preventDefault();
+                if (!newsText && !newsImage) return;
+                await db.collection('news').add({
+                    text: newsText,
+                    imageUrl: newsImage,
+                    authorId: profile.userId,
+                    authorName: profile.name,
+                    timestamp: Date.now()
+                });
+                setNewsText('');
+                setNewsImage(null);
+                const fileInput = document.getElementById('news-file');
+                if(fileInput) fileInput.value = '';
+            };
 
             return (
                 <div className="space-y-8 animate-fade-in-up">
@@ -679,11 +772,58 @@
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2">
+                        <div className="lg:col-span-2 space-y-8">
                             <DashboardCalendar events={events || []} eventRecruitments={eventRecruitments} profile={profile} />
+                            
+                            {/* ANNOUNCEMENTS & NEWS FEED */}
+                            <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
+                                <h2 className="text-2xl font-black uppercase tracking-widest mb-6 border-b-2 border-black pb-2 flex items-center gap-2">
+                                    <Flag size={24} /> Club Announcements
+                                </h2>
+                                
+                                {profile.role === ROLES.PRESIDENT && (
+                                    <form onSubmit={handlePostNews} className="mb-8 border-4 border-[#433f92] p-4 bg-gray-50 dark:bg-gray-900">
+                                        <textarea value={newsText} onChange={e=>setNewsText(e.target.value)} placeholder="Share news, updates, or reports..." className="w-full bg-white dark:bg-gray-800 border-2 border-black p-3 outline-none font-mono text-sm h-24 mb-4"></textarea>
+                                        {newsImage && (
+                                            <div className="mb-4 relative inline-block">
+                                                <img src={newsImage} alt="Preview" className="h-32 object-cover border-2 border-black" />
+                                                <button type="button" onClick={() => {setNewsImage(null); document.getElementById('news-file').value='';}} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1"><XCircle size={16}/></button>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-center">
+                                            <label className="cursor-pointer flex items-center gap-2 font-bold uppercase tracking-widest text-xs hover:text-[#ec8b3f] transition-colors">
+                                                <Camera size={18} /> Attach Photo
+                                                <input type="file" id="news-file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                                            </label>
+                                            <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-6 py-2 font-black uppercase tracking-widest border-2 border-transparent">Post</button>
+                                        </div>
+                                    </form>
+                                )}
+
+                                <div className="space-y-6 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
+                                    {news.map(n => (
+                                        <div key={n.id} className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
+                                            <div className="flex items-center gap-3 mb-4 border-b-2 border-dashed border-gray-300 pb-3">
+                                                <div className="w-10 h-10 bg-black text-white flex items-center justify-center font-black uppercase text-lg border-2 border-black shrink-0">
+                                                    {n.authorName.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black uppercase tracking-widest">{n.authorName}</p>
+                                                    <p className="text-[10px] font-mono text-gray-500">{new Date(n.timestamp).toLocaleString()}</p>
+                                                </div>
+                                            </div>
+                                            <p className="font-mono text-sm leading-relaxed whitespace-pre-wrap">{n.text}</p>
+                                            {n.imageUrl && (
+                                                <img src={n.imageUrl} alt="News Image" className="mt-4 w-full h-auto border-4 border-black object-cover max-h-96" />
+                                            )}
+                                        </div>
+                                    ))}
+                                    {news.length === 0 && <p className="text-gray-500 font-mono text-sm">No announcements yet.</p>}
+                                </div>
+                            </div>
                         </div>
                         
-                        <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] h-full">
+                        <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] h-full max-h-[500px]">
                             <h2 className="text-xl font-black uppercase tracking-widest mb-4 border-b-2 border-black pb-2">Top Volunteers</h2>
                             <div className="space-y-2">
                                 {leaderboard.map((u, i) => (
@@ -715,6 +855,10 @@
             const [recruitmentCapacity, setRecruitmentCapacity] = useState('');
             const [recruitmentHours, setRecruitmentHours] = useState('');
 
+            // Edit Event State
+            const [editEventId, setEditEventId] = useState(null);
+            const [editEventForm, setEditEventForm] = useState({ title: '', date: '', description: '' });
+
             const handleCreateEvent = async (e) => {
                 e.preventDefault();
                 if (!title || !date) return;
@@ -722,6 +866,26 @@
                     title, date, description, authorId: profile.userId, timestamp: Date.now()
                 });
                 setTitle(''); setDate(''); setDescription('');
+            };
+
+            const handleDeleteEvent = async (id) => {
+                if (window.confirm("Are you sure you want to delete this event? This action cannot be undone.")) {
+                    await db.collection('events').doc(id).delete();
+                }
+            };
+
+            const startEditEvent = (evt) => {
+                setEditEventId(evt.id);
+                setEditEventForm({ title: evt.title, date: evt.date, description: evt.description });
+            };
+
+            const saveEditEvent = async (id) => {
+                await db.collection('events').doc(id).update({
+                    title: editEventForm.title,
+                    date: editEventForm.date,
+                    description: editEventForm.description
+                });
+                setEditEventId(null);
             };
 
             const handleSubmitIdea = async (e) => {
@@ -736,16 +900,13 @@
             };
 
             const handleApproveIdea = async (idea) => {
-                // 1. Create Event
                 await db.collection('events').add({
                     title: idea.title, date: idea.date, description: `(Idea by ${idea.authorName}) ${idea.description}`, timestamp: Date.now()
                 });
-                // 2. Grant +1 Hour
                 await db.collection('hours').add({
                     userId: idea.authorId, userName: idea.authorName, amount: 1,
                     description: `Approved Event Idea: ${idea.title}`, status: 'Approved', timestamp: Date.now()
                 });
-                // 3. Mark Idea Approved
                 await db.collection('eventIdeas').doc(idea.id).update({ status: 'Approved' });
             };
 
@@ -779,16 +940,37 @@
                         {events.length === 0 ? (
                             <p className="text-gray-500 font-mono text-sm">No upcoming events scheduled.</p>
                         ) : (
-                            <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar pr-2">
+                            <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
                                 {events.sort((a,b) => new Date(a.date) - new Date(b.date)).map(evt => {
                                     const recruitmentsForEvent = eventRecruitments.filter(r => r.eventId === evt.id);
+                                    
+                                    if (editEventId === evt.id) {
+                                        return (
+                                            <div key={evt.id} className="p-4 border-4 border-[#ec8b3f] bg-white dark:bg-gray-800">
+                                                <input value={editEventForm.title} onChange={e=>setEditEventForm({...editEventForm, title: e.target.value})} className="w-full border-2 border-black p-2 mb-2 outline-none dark:bg-gray-700 font-black uppercase" placeholder="Event Title"/>
+                                                <input type="date" value={editEventForm.date} onChange={e=>setEditEventForm({...editEventForm, date: e.target.value})} className="w-full border-2 border-black p-2 mb-2 outline-none dark:bg-gray-700 font-mono"/>
+                                                <textarea value={editEventForm.description} onChange={e=>setEditEventForm({...editEventForm, description: e.target.value})} className="w-full border-2 border-black p-2 mb-2 outline-none dark:bg-gray-700 font-mono text-sm h-20" placeholder="Description"></textarea>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => saveEditEvent(evt.id)} className="flex-1 bg-green-500 text-white font-black uppercase p-2 border-2 border-black hover:bg-black">Save Changes</button>
+                                                    <button onClick={() => setEditEventId(null)} className="flex-1 bg-gray-300 text-black font-black uppercase p-2 border-2 border-black hover:bg-gray-400">Cancel</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
                                     return (
-                                        <div key={evt.id} className="flex flex-col sm:flex-row gap-4 p-4 border-2 border-black bg-gray-50 dark:bg-gray-700 items-start sm:items-center">
+                                        <div key={evt.id} className="flex flex-col sm:flex-row gap-4 p-4 border-2 border-black bg-gray-50 dark:bg-gray-700 items-start sm:items-center relative">
+                                            {isPresident && (
+                                                <div className="absolute top-2 right-2 flex gap-2">
+                                                    <button onClick={() => startEditEvent(evt)} className="p-1 hover:text-blue-500 bg-white dark:bg-gray-800 border-2 border-black"><Edit3 size={16}/></button>
+                                                    <button onClick={() => handleDeleteEvent(evt.id)} className="p-1 hover:text-red-500 bg-white dark:bg-gray-800 border-2 border-black"><Trash2 size={16}/></button>
+                                                </div>
+                                            )}
                                             <div className="bg-[#433f92] text-white p-3 font-black text-center min-w-[100px] shrink-0">
                                                 <div className="text-2xl">{new Date(evt.date).getDate()}</div>
                                                 <div className="text-xs uppercase">{new Date(evt.date).toLocaleString('default', { month: 'short', year: 'numeric' })}</div>
                                             </div>
-                                            <div className="flex-1">
+                                            <div className="flex-1 pr-16">
                                                 <h3 className="font-black text-lg uppercase">{evt.title}</h3>
                                                 <p className="text-sm font-mono text-gray-600 dark:text-gray-300 mb-2">{evt.description}</p>
                                                 {recruitmentsForEvent.length > 0 && (
@@ -810,26 +992,28 @@
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         
-                        {/* MEMBER: SUBMIT IDEA */}
-                        <div className="bg-[#f4f4f0] dark:bg-gray-900 border-4 border-[#433f92] p-6 shadow-[8px_8px_0px_0px_#433f92]">
-                            <h2 className="text-xl font-black uppercase tracking-widest mb-2 text-[#433f92] dark:text-[#a09df0]">Pitch an Event Idea</h2>
-                            <p className="text-xs font-bold text-gray-500 mb-6 uppercase">Approved ideas grant +1 Volunteer Hour</p>
-                            <form onSubmit={handleSubmitIdea} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs uppercase font-black mb-1">Event Title</label>
-                                    <input required type="text" value={ideaTitle} onChange={e=>setIdeaTitle(e.target.value)} className="w-full border-2 border-black p-3 outline-none dark:bg-gray-800" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs uppercase font-black mb-1">Proposed Date</label>
-                                    <input required type="date" value={ideaDate} onChange={e=>setIdeaDate(e.target.value)} className="w-full border-2 border-black p-3 outline-none dark:bg-gray-800 font-mono" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs uppercase font-black mb-1">Resources & Goal</label>
-                                    <textarea required value={ideaDesc} onChange={e=>setIdeaDesc(e.target.value)} className="w-full border-2 border-black p-3 outline-none dark:bg-gray-800 h-24 font-mono text-sm" placeholder="Who is it for? What is needed?"></textarea>
-                                </div>
-                                <button type="submit" className="w-full bg-[#433f92] hover:bg-black text-white p-3 font-black uppercase tracking-widest transition-colors">Submit Pitch</button>
-                            </form>
-                        </div>
+                        {/* MEMBER/HEADS: SUBMIT IDEA (HIDDEN FOR PRESIDENT) */}
+                        {!isPresident && (
+                            <div className="bg-[#f4f4f0] dark:bg-gray-900 border-4 border-[#433f92] p-6 shadow-[8px_8px_0px_0px_#433f92]">
+                                <h2 className="text-xl font-black uppercase tracking-widest mb-2 text-[#433f92] dark:text-[#a09df0]">Pitch an Event Idea</h2>
+                                <p className="text-xs font-bold text-gray-500 mb-6 uppercase">Approved ideas grant +1 Volunteer Hour</p>
+                                <form onSubmit={handleSubmitIdea} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs uppercase font-black mb-1">Event Title</label>
+                                        <input required type="text" value={ideaTitle} onChange={e=>setIdeaTitle(e.target.value)} className="w-full border-2 border-black p-3 outline-none dark:bg-gray-800" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs uppercase font-black mb-1">Proposed Date</label>
+                                        <input required type="date" value={ideaDate} onChange={e=>setIdeaDate(e.target.value)} className="w-full border-2 border-black p-3 outline-none dark:bg-gray-800 font-mono" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs uppercase font-black mb-1">Resources & Goal</label>
+                                        <textarea required value={ideaDesc} onChange={e=>setIdeaDesc(e.target.value)} className="w-full border-2 border-black p-3 outline-none dark:bg-gray-800 h-24 font-mono text-sm" placeholder="Who is it for? What is needed?"></textarea>
+                                    </div>
+                                    <button type="submit" className="w-full bg-[#433f92] hover:bg-black text-white p-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Submit Pitch</button>
+                                </form>
+                            </div>
+                        )}
 
                         {/* PRESIDENT: ADD EVENT DIRECTLY */}
                         {isPresident && (
@@ -848,7 +1032,7 @@
                                         <label className="block text-xs uppercase font-black mb-1">Description</label>
                                         <textarea value={description} onChange={e=>setDescription(e.target.value)} className="w-full border-2 border-black p-3 outline-none dark:bg-gray-800 h-24 font-mono text-sm"></textarea>
                                     </div>
-                                    <button type="submit" className="w-full bg-[#ec8b3f] hover:bg-black text-white p-3 font-black uppercase tracking-widest transition-colors">Add to Calendar</button>
+                                    <button type="submit" className="w-full bg-[#ec8b3f] hover:bg-black text-white p-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Add to Calendar</button>
                                 </form>
                             </div>
                         )}
@@ -898,8 +1082,8 @@
                                             <p className="text-sm font-mono mt-2">{idea.description}</p>
                                         </div>
                                         <div className="flex gap-2 w-full md:w-auto">
-                                            <button onClick={() => handleApproveIdea(idea)} className="flex-1 md:flex-none bg-green-500 hover:bg-green-600 text-white px-4 py-2 font-black uppercase text-xs">Approve (+1 Hr)</button>
-                                            <button onClick={() => handleRejectIdea(idea.id)} className="flex-1 md:flex-none bg-red-500 hover:bg-red-600 text-white px-4 py-2 font-black uppercase text-xs">Reject</button>
+                                            <button onClick={() => handleApproveIdea(idea)} className="flex-1 md:flex-none bg-green-500 hover:bg-green-600 text-white px-4 py-2 font-black uppercase text-xs border-2 border-transparent">Approve (+1 Hr)</button>
+                                            <button onClick={() => handleRejectIdea(idea.id)} className="flex-1 md:flex-none bg-red-500 hover:bg-red-600 text-white px-4 py-2 font-black uppercase text-xs border-2 border-transparent">Reject</button>
                                         </div>
                                     </div>
                                 ))}
