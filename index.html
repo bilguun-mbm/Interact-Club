@@ -209,7 +209,8 @@
                 return <IdentityGate profiles={profiles} />;
             }
 
-            if (profile.status === 'Removed') return <BannedScreen />;
+            // Strictly enforcing that only 'Active' status members have access
+            if (profile.status !== 'Active') return <BannedScreen />;
 
             const currentBalance = treasury.reduce((acc, curr) => acc + Number(curr.amount), 0);
 
@@ -417,8 +418,8 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedSector, setSelectedSector] = useState('All');
 
-            // Filter out Removed members
-            const activeMembers = profiles.filter(p => p.status !== 'Removed');
+            // Strictly filter only Active members so revoked/removed completely disappear
+            const activeMembers = profiles.filter(p => p.status === 'Active');
 
             const filteredMembers = activeMembers.filter(p => {
                 const term = searchTerm.toLowerCase().trim();
@@ -999,7 +1000,8 @@
                                                             <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Registered Members (click to view):</p>
                                                             <div className="flex flex-wrap gap-1">
                                                                 {r.applicants.map(uid => {
-                                                                    const appProfile = profiles.find(p => p.userId === uid);
+                                                                    // Strict filtering applied here to ensure revoked applicants aren't listed
+                                                                    const appProfile = profiles.find(p => p.userId === uid && p.status === 'Active');
                                                                     if (!appProfile) return null;
                                                                     return (
                                                                         <button 
@@ -1045,7 +1047,7 @@
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
-            // Only active users appear on leaderboard
+            // Strictly Active users only for Leaderboard 
             const activeUserIds = profiles.filter(p => p.status === 'Active').map(p => p.userId);
             const allApproved = hours.filter(h => h.status === 'Approved' && activeUserIds.includes(h.userId));
             const leaderboard = Object.values(allApproved.reduce((acc, h) => {
@@ -1621,7 +1623,8 @@
             const [reason, setReason] = useState('');
             const [success, setSuccess] = useState(false);
 
-            const activeProfiles = profiles.filter(p => p.status !== 'Removed' && p.userId !== profile.userId);
+            // strictly filtering active profiles for dropdowns to prevent reporting ghosts
+            const activeProfiles = profiles.filter(p => p.status === 'Active' && p.userId !== profile.userId);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -1678,8 +1681,8 @@
             const [bulkSector, setBulkSector] = useState('');
             const [bulkHours, setBulkHours] = useState('');
 
-            // Hide removed members and filter out other Presidents
-            const targetProfiles = profiles.filter(p => p.status !== 'Removed' && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
+            // Hide removed members perfectly from Admin roster filtering
+            const targetProfiles = profiles.filter(p => p.status === 'Active' && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
 
             const handleSendEmail = (targetEmail, subject, body) => {
                 window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}
