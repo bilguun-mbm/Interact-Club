@@ -109,6 +109,13 @@
             'Global': 'border-[#433f92] bg-[#433f92]/10 text-[#433f92] dark:bg-[#433f92]/30 dark:text-indigo-300'
         };
 
+        // Helper to identify revoked/banned users
+        const isRevoked = (p) => {
+            if (!p) return true;
+            const status = String(p.status || '').toLowerCase().trim();
+            return status === 'removed' || status === 'revoked' || status === 'banned' || status === 'inactive';
+        };
+
         // --- MAIN APPLICATION COMPONENT ---
         function App() {
             // Auth & Profile State
@@ -143,6 +150,7 @@
                     if (u) {
                         const doc = await db.collection('profiles').doc(u.uid).get();
                         if (doc.exists) setProfile({ id: doc.id, userId: u.uid, ...doc.data() });
+                        else setProfile(null);
                     } else {
                         setProfile(null);
                     }
@@ -161,7 +169,7 @@
                 unsubs.push(db.collection('profiles').onSnapshot(snap => {
                     const data = mapSnap(snap);
                     setProfiles(data);
-                    const myProfile = data.find(p => p.userId === user.uid);
+                    const myProfile = data.find(p => p.userId === user.uid || p.id === user.uid);
                     if (myProfile) setProfile(myProfile);
                 }));
                 unsubs.push(db.collection('treasury').orderBy('timestamp', 'desc').onSnapshot(snap => setTreasury(mapSnap(snap))));
@@ -186,6 +194,82 @@
             const isFinance = profile?.role === ROLES.HEAD_FINANCE;
             const canModifyTreasury = isPresident || isFinance;
 
+            // --- PERMANENT MEMBER PURGE (PRESIDENT ONLY, NO TRACE) ---
+            const deleteMemberPermanently = async (targetProfile, silent = false) => {
+                if (!isPresident) {
+                    alert("Unauthorized: Only the President can permanently purge members.");
+                    return;
+                }
+                const targetUserId = targetProfile.userId || targetProfile.id;
+                const targetDocId = targetProfile.id || targetProfile.userId;
+                const targetName = targetProfile.name || 'this member';
+
+                if (!silent) {
+                    const confirmMsg = `PERMANENT DELETION WARNING:\n\nAre you sure you want to completely erase ${targetName} from the database?\n\nThis will purge their profile, service hours, pitch proposals, event registrations, and report mentions with NO TRACE.\n\nThis action cannot be undone.`;
+                    if (!window.confirm(confirmMsg)) return;
+                }
+
+                try {
+                    // 1. Delete profile doc(s)
+                    await db.collection('profiles').doc(targetDocId).delete();
+                    if (targetUserId && targetUserId !== targetDocId) {
+                        await db.collection('profiles').doc(targetUserId).delete().catch(() => {});
+                    }
+
+                    // 2. Remove applicant slots from all eventRecruitments
+                    const recSnap = await db.collection('eventRecruitments').get();
+                    const batch1 = db.batch();
+                    recSnap.forEach(doc => {
+                        const data = doc.data();
+                        if (data.applicants && (data.applicants.includes(targetUserId) || data.applicants.includes(targetDocId))) {
+                            batch1.update(doc.ref, {
+                                applicants: data.applicants.filter(id => id !== targetUserId && id !== targetDocId)
+                            });
+                        }
+                    });
+                    await batch1.commit();
+
+                    // 3. Purge volunteer hours
+                    const hoursSnap1 = await db.collection('hours').where('userId', '==', targetUserId).get();
+                    const batch2 = db.batch();
+                    hoursSnap1.forEach(doc => batch2.delete(doc.ref));
+                    await batch2.commit();
+
+                    // 4. Purge personal reminders
+                    const remSnap = await db.collection('reminders').where('userId', '==', targetUserId).get();
+                    const batch3 = db.batch();
+                    remSnap.forEach(doc => batch3.delete(doc.ref));
+                    await batch3.commit();
+
+                    // 5. Purge event idea pitches
+                    const ideaSnap = await db.collection('eventIdeas').where('authorId', '==', targetUserId).get();
+                    const batch4 = db.batch();
+                    ideaSnap.forEach(doc => batch4.delete(doc.ref));
+                    await batch4.commit();
+
+                    // 6. Purge reports related to user
+                    const repSnap1 = await db.collection('reports').where('reportedUserId', '==', targetUserId).get();
+                    const repSnap2 = await db.collection('reports').where('reportedUserId', '==', targetDocId).get();
+                    const repSnap3 = await db.collection('reports').where('reporterId', '==', targetUserId).get();
+                    const batch5 = db.batch();
+                    repSnap1.forEach(doc => batch5.delete(doc.ref));
+                    repSnap2.forEach(doc => batch5.delete(doc.ref));
+                    repSnap3.forEach(doc => batch5.delete(doc.ref));
+                    await batch5.commit();
+
+                    if (viewingMemberProfile && (viewingMemberProfile.userId === targetUserId || viewingMemberProfile.id === targetDocId)) {
+                        setViewingMemberProfile(null);
+                    }
+
+                    if (!silent) {
+                        alert(`Member "${targetName}" has been completely erased from the portal with no trace.`);
+                    }
+                } catch (err) {
+                    console.error("Error wiping member:", err);
+                    alert(`Failed to delete member: ${err.message}`);
+                }
+            };
+
             // --- RADIAL THEME TOGGLE ---
             const handleToggleTheme = (e) => {
                 const x = e.clientX;
@@ -209,8 +293,7 @@
                 return <IdentityGate profiles={profiles} />;
             }
 
-            // Strictly enforcing that only 'Active' status members have access
-            if (profile.status !== 'Active') return <BannedScreen />;
+            if (isRevoked(profile)) return <BannedScreen />;
 
             const currentBalance = treasury.reduce((acc, curr) => acc + Number(curr.amount), 0);
 
@@ -328,13 +411,13 @@
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
                                 {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} isPresident={isPresident} isHead={isHead} onOpenMemberProfile={setViewingMemberProfile} />}
-                                {activeTab === 'members' && <MembersDirectoryView profiles={profiles} hours={hours} onOpenMemberProfile={setViewingMemberProfile} />}
+                                {activeTab === 'members' && <MembersDirectoryView profiles={profiles} hours={hours} onOpenMemberProfile={setViewingMemberProfile} isPresident={isPresident} onDeleteMember={deleteMemberPermanently} />}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
                                 {activeTab === 'reminders' && <RemindersView reminders={reminders} profile={profile} />}
                                 {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} profiles={profiles} onOpenMemberProfile={setViewingMemberProfile} />}
                                 {activeTab === 'hours' && !isPresident && <HoursView hours={hours} profile={profile} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
-                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} onOpenMemberProfile={setViewingMemberProfile} />}
+                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} onOpenMemberProfile={setViewingMemberProfile} onDeleteMember={deleteMemberPermanently} />}
                             </main>
 
                         </div>
@@ -352,6 +435,8 @@
                             profile={viewingMemberProfile} 
                             hours={hours} 
                             onClose={() => setViewingMemberProfile(null)} 
+                            isPresident={isPresident}
+                            onDeleteMember={deleteMemberPermanently}
                         />
                     )}
                 </div>
@@ -414,12 +499,12 @@
         // ==========================================
         // MEMBERS DIRECTORY & COMPLETE PROFILE VIEW
         // ==========================================
-        function MembersDirectoryView({ profiles, hours, onOpenMemberProfile }) {
+        function MembersDirectoryView({ profiles, hours, onOpenMemberProfile, isPresident, onDeleteMember }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedSector, setSelectedSector] = useState('All');
 
-            // Strictly filter only Active members so revoked/removed completely disappear
-            const activeMembers = profiles.filter(p => p.status === 'Active');
+            // Strictly filter out Revoked and Removed members so they disappear completely
+            const activeMembers = profiles.filter(p => !isRevoked(p));
 
             const filteredMembers = activeMembers.filter(p => {
                 const term = searchTerm.toLowerCase().trim();
@@ -437,7 +522,7 @@
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-l-8 border-[#433f92] pl-4">
                         <div>
                             <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">Club Directory</h1>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Discover, connect with, and view complete dossiers of fellow members</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Discover, connect with, and view complete dossiers of active members</p>
                         </div>
                         <span className="font-mono text-xs font-bold px-3 py-1 bg-black text-white self-start md:self-auto uppercase">
                             {filteredMembers.length} Active {filteredMembers.length === 1 ? 'Member' : 'Members'}
@@ -487,24 +572,40 @@
                                 <div 
                                     key={m.id || m.userId}
                                     onClick={() => onOpenMemberProfile(m)}
-                                    className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[8px_8px_0px_0px_#ec8b3f] hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between"
+                                    className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[8px_8px_0px_0px_#ec8b3f] hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between relative group"
                                 >
                                     <div>
-                                        <div className="flex items-start gap-4 mb-4">
-                                            <div className="w-14 h-14 bg-black border-2 border-black text-white flex items-center justify-center font-black text-xl shrink-0 overflow-hidden">
-                                                {m.avatar ? (
-                                                    <img src={m.avatar} alt="avatar" className="w-full h-full object-cover"/>
-                                                ) : (
-                                                    m.nickname ? m.nickname.charAt(0).toUpperCase() : m.name.charAt(0).toUpperCase()
-                                                )}
+                                        <div className="flex items-start justify-between gap-3 mb-4">
+                                            <div className="flex items-start gap-3 overflow-hidden">
+                                                <div className="w-14 h-14 bg-black border-2 border-black text-white flex items-center justify-center font-black text-xl shrink-0 overflow-hidden">
+                                                    {m.avatar ? (
+                                                        <img src={m.avatar} alt="avatar" className="w-full h-full object-cover"/>
+                                                    ) : (
+                                                        m.nickname ? m.nickname.charAt(0).toUpperCase() : m.name.charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div className="overflow-hidden flex-1">
+                                                    <h3 className="font-black text-lg uppercase tracking-tight truncate leading-tight">{m.name}</h3>
+                                                    {m.nickname && (
+                                                        <p className="text-xs font-bold text-[#ec8b3f] font-mono truncate">"{m.nickname}"</p>
+                                                    )}
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-1 truncate">{m.role}</p>
+                                                </div>
                                             </div>
-                                            <div className="overflow-hidden flex-1">
-                                                <h3 className="font-black text-lg uppercase tracking-tight truncate leading-tight">{m.name}</h3>
-                                                {m.nickname && (
-                                                    <p className="text-xs font-bold text-[#ec8b3f] font-mono truncate">"{m.nickname}"</p>
-                                                )}
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-1 truncate">{m.role}</p>
-                                            </div>
+
+                                            {/* PRESIDENT EXCLUSIVE PURGE BUTTON */}
+                                            {isPresident && m.role !== ROLES.PRESIDENT && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onDeleteMember(m);
+                                                    }}
+                                                    className="p-2 border-2 border-black bg-red-600 hover:bg-black text-white shadow-[2px_2px_0px_0px_#000] transition-colors shrink-0"
+                                                    title="Permanently remove member from database with no trace"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            )}
                                         </div>
 
                                         <div className="space-y-1 text-xs font-mono pt-3 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
@@ -535,7 +636,7 @@
                     {filteredMembers.length === 0 && (
                         <div className="p-12 border-4 border-black bg-white dark:bg-gray-800 text-center space-y-2">
                             <p className="font-black text-xl uppercase tracking-tighter">No members found</p>
-                            <p className="text-sm font-mono text-gray-500">No member matches your search "{searchTerm}". Try a different name or nickname.</p>
+                            <p className="text-sm font-mono text-gray-500">No member matches your criteria. Revoked members have been purged from directory.</p>
                         </div>
                     )}
                 </div>
@@ -543,7 +644,7 @@
         }
 
         // --- COMPLETE MEMBER DOSSIER / PROFILE MODAL ---
-        function MemberProfileModal({ profile, hours, onClose }) {
+        function MemberProfileModal({ profile, hours, onClose, isPresident, onDeleteMember }) {
             const userApprovedHours = hours
                 .filter(h => h.userId === profile.userId && h.status === 'Approved')
                 .reduce((acc, h) => acc + Number(h.amount), 0);
@@ -560,7 +661,18 @@
                                 <span className="text-[10px] font-black uppercase tracking-widest text-[#ec8b3f] block">KhaSu Member Dossier</span>
                                 <h2 className="font-black text-2xl uppercase tracking-tighter truncate">{profile.name}</h2>
                             </div>
-                            <button onClick={onClose} className="p-1 hover:text-[#ec8b3f] transition-colors"><XCircle size={28}/></button>
+                            <div className="flex items-center gap-3">
+                                {isPresident && profile.role !== ROLES.PRESIDENT && (
+                                    <button 
+                                        onClick={() => onDeleteMember(profile)} 
+                                        className="px-3 py-1.5 bg-red-600 hover:bg-black text-white text-xs font-black uppercase tracking-widest border-2 border-white flex items-center gap-1.5 transition-colors shadow-[2px_2px_0px_0px_#fff]"
+                                        title="Completely remove this member with no trace"
+                                    >
+                                        <Trash2 size={14}/> Delete User (No Trace)
+                                    </button>
+                                )}
+                                <button onClick={onClose} className="p-1 hover:text-[#ec8b3f] transition-colors"><XCircle size={28}/></button>
+                            </div>
                         </div>
 
                         <div className="p-6 md:p-8 space-y-6">
@@ -728,7 +840,7 @@
                         if (!email.endsWith('@orkhonschool.edu.mn')) {
                             throw new Error("Only @orkhonschool.edu.mn emails are allowed to register.");
                         }
-                        const exists = profiles.some(p => p.email.toLowerCase() === email.toLowerCase());
+                        const exists = profiles.some(p => p.email && p.email.toLowerCase() === email.toLowerCase());
                         if (exists) throw new Error("Email already registered. Please login.");
                         if (!phone || !schoolClass) throw new Error("Phone number and School Class are mandatory.");
                         
@@ -835,7 +947,7 @@
                 <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
                     <ShieldAlert size={64} className="text-red-600 mb-6" />
                     <h1 className="text-4xl font-black text-white uppercase tracking-widest mb-4">Access Revoked</h1>
-                    <p className="text-gray-400 max-w-md font-mono">Your membership status has been updated by the administration. You no longer have active access to the KhaSu Interact Portal.</p>
+                    <p className="text-gray-400 max-w-md font-mono">Your membership status has been revoked by the administration. You no longer have active access to the KhaSu Interact Portal.</p>
                 </div>
             );
         }
@@ -994,15 +1106,14 @@
                                                     </div>
                                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Sector: {r.sector}</p>
                                                     
-                                                    {/* Applicants clickable list */}
+                                                    {/* Registered active members only */}
                                                     {r.applicants && r.applicants.length > 0 && (
                                                         <div className="mb-3 pt-2 border-t border-dashed border-gray-300 dark:border-gray-600">
-                                                            <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Registered Members (click to view):</p>
+                                                            <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Registered Active Members:</p>
                                                             <div className="flex flex-wrap gap-1">
                                                                 {r.applicants.map(uid => {
-                                                                    // Strict filtering applied here to ensure revoked applicants aren't listed
-                                                                    const appProfile = profiles.find(p => p.userId === uid && p.status === 'Active');
-                                                                    if (!appProfile) return null;
+                                                                    const appProfile = profiles.find(p => p.userId === uid || p.id === uid);
+                                                                    if (!appProfile || isRevoked(appProfile)) return null;
                                                                     return (
                                                                         <button 
                                                                             key={uid} 
@@ -1047,8 +1158,8 @@
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
-            // Strictly Active users only for Leaderboard 
-            const activeUserIds = profiles.filter(p => p.status === 'Active').map(p => p.userId);
+            // Only active, unrevoked users appear on leaderboard
+            const activeUserIds = profiles.filter(p => !isRevoked(p)).map(p => p.userId);
             const allApproved = hours.filter(h => h.status === 'Approved' && activeUserIds.includes(h.userId));
             const leaderboard = Object.values(allApproved.reduce((acc, h) => {
                 acc[h.userId] = acc[h.userId] || { userId: h.userId, name: h.userName, total: 0 };
@@ -1158,7 +1269,7 @@
                         </div>
                         <div className="bg-white dark:bg-gray-800 p-6 border-4 border-black shadow-[8px_8px_0px_0px_#433f92]">
                             <p className="text-xs uppercase font-black tracking-widest mb-2 text-gray-500">Active Members</p>
-                            <p className="text-6xl font-black text-gray-900 dark:text-white">{profiles.filter(p => p.status === 'Active').length}</p>
+                            <p className="text-6xl font-black text-gray-900 dark:text-white">{profiles.filter(p => !isRevoked(p)).length}</p>
                         </div>
                     </div>
 
@@ -1214,7 +1325,7 @@
                             </div>
                         </div>
                         
-                        {/* Leaderboard with Clickable Profiles */}
+                        {/* Leaderboard with Active Profiles Only */}
                         <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] h-full max-h-[500px]">
                             <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
                                 <h2 className="text-xl font-black uppercase tracking-widest">Top Volunteers</h2>
@@ -1222,11 +1333,12 @@
                             </div>
                             <div className="space-y-2">
                                 {leaderboard.map((u, i) => {
-                                    const memberProf = profiles.find(p => p.userId === u.userId);
+                                    const memberProf = profiles.find(p => p.userId === u.userId || p.id === u.userId);
+                                    if (!memberProf || isRevoked(memberProf)) return null;
                                     return (
                                         <div 
                                             key={i} 
-                                            onClick={() => memberProf && onOpenMemberProfile(memberProf)}
+                                            onClick={() => onOpenMemberProfile(memberProf)}
                                             className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 border-2 border-transparent hover:border-[#ec8b3f] hover:translate-x-1 cursor-pointer transition-all"
                                             title="Click to view complete profile"
                                         >
@@ -1623,17 +1735,16 @@
             const [reason, setReason] = useState('');
             const [success, setSuccess] = useState(false);
 
-            // strictly filtering active profiles for dropdowns to prevent reporting ghosts
-            const activeProfiles = profiles.filter(p => p.status === 'Active' && p.userId !== profile.userId);
+            const activeProfiles = profiles.filter(p => !isRevoked(p) && p.userId !== profile.userId);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!reportedUser || !reason) return;
-                const target = profiles.find(p => p.id === reportedUser);
+                const target = profiles.find(p => p.id === reportedUser || p.userId === reportedUser);
                 if(!target) return;
 
                 await db.collection('reports').add({
-                    reportedUserId: target.id, reportedUserName: target.name, reporterId: profile.userId, reporterName: profile.name, reason, status: 'Open', timestamp: Date.now()
+                    reportedUserId: target.userId || target.id, reportedUserName: target.name, reporterId: profile.userId, reporterName: profile.name, reason, status: 'Open', timestamp: Date.now()
                 });
                 setReportedUser(''); setReason(''); setSuccess(true);
                 setTimeout(() => setSuccess(false), 3000);
@@ -1657,7 +1768,7 @@
                                 <label className="block text-xs uppercase font-black mb-2 tracking-widest text-black dark:text-white">Member to Report</label>
                                 <select required value={reportedUser} onChange={e=>setReportedUser(e.target.value)} className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-900 rounded-none p-4 outline-none focus:border-red-600 font-bold uppercase cursor-pointer">
                                     <option value="">Select Member...</option>
-                                    {activeProfiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
+                                    {activeProfiles.map(p => <option key={p.id || p.userId} value={p.userId || p.id}>{p.name} ({p.role})</option>)}
                                 </select>
                             </div>
                             <div>
@@ -1674,15 +1785,15 @@
         }
 
         // --- ADMIN & SPREADSHEET VIEW ---
-        function AdminView({ profiles, isPresident, reports, currentUser, eventRecruitments, onOpenMemberProfile }) {
+        function AdminView({ profiles, isPresident, reports, currentUser, eventRecruitments, onOpenMemberProfile, onDeleteMember }) {
             const [selectedUsers, setSelectedUsers] = useState([]);
             const [lastChecked, setLastChecked] = useState(null);
             
             const [bulkSector, setBulkSector] = useState('');
             const [bulkHours, setBulkHours] = useState('');
 
-            // Hide removed members perfectly from Admin roster filtering
-            const targetProfiles = profiles.filter(p => p.status === 'Active' && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
+            // Hide revoked members and filter out other Presidents from mass editing
+            const targetProfiles = profiles.filter(p => !isRevoked(p) && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
 
             const handleSendEmail = (targetEmail, subject, body) => {
                 window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}
@@ -1720,12 +1831,14 @@ KhaSu Interact Club`;
                 else setSelectedUsers([]);
             };
 
-            // --- BULK ACTIONS (Soft-Ban / Revoke: removes from registers & spreadsheet, preserves account) ---
+            // Soft-Revoke (sets status Removed)
             const handleBulkBan = async () => {
-                if (!window.confirm(`Revoke portal access for ${selectedUsers.length} selected users? (Their account and historical logs remain safe in Firebase, but their event registrations will be freed up)`)) return;
+                if (!window.confirm(`Revoke portal access for ${selectedUsers.length} selected users?`)) return;
                 
                 for (const uid of selectedUsers) {
-                    await db.collection('profiles').doc(uid).update({ status: 'Removed' });
+                    const target = profiles.find(p => p.userId === uid || p.id === uid);
+                    const docId = target?.id || uid;
+                    await db.collection('profiles').doc(docId).update({ status: 'Removed' });
                     
                     const recsToUpdate = (eventRecruitments || []).filter(r => r.applicants && r.applicants.includes(uid));
                     for (const r of recsToUpdate) {
@@ -1734,12 +1847,32 @@ KhaSu Interact Club`;
                     }
                 }
                 setSelectedUsers([]);
-                alert("Access revoked and event spots cleared.");
+                alert("Access revoked for selected members.");
+            };
+
+            // PERMANENT PURGE (PRESIDENT ONLY, DELETES WITH NO TRACE)
+            const handleBulkPurge = async () => {
+                if (!isPresident) return;
+                const confirmMsg = `PERMANENT MASS PURGE WARNING:\n\nAre you sure you want to completely erase ${selectedUsers.length} selected member(s) from the portal with NO TRACE?\n\nThis will purge all their records, hours, applications, and documents from Firebase immediately.`;
+                if (!window.confirm(confirmMsg)) return;
+
+                for (const uid of selectedUsers) {
+                    const target = profiles.find(p => p.userId === uid || p.id === uid);
+                    if (target) {
+                        await onDeleteMember(target, true);
+                    }
+                }
+                setSelectedUsers([]);
+                alert("Selected members have been permanently erased from the portal with no trace.");
             };
 
             const handleBulkSectorChange = async () => {
                 if (!bulkSector || selectedUsers.length === 0) return;
-                const promises = selectedUsers.map(id => db.collection('profiles').doc(id).update({ sector: bulkSector }));
+                const promises = selectedUsers.map(uid => {
+                    const target = profiles.find(p => p.userId === uid || p.id === uid);
+                    const docId = target?.id || uid;
+                    return db.collection('profiles').doc(docId).update({ sector: bulkSector });
+                });
                 await Promise.all(promises);
                 setSelectedUsers([]); setBulkSector('');
                 alert("Sectors updated.");
@@ -1748,9 +1881,9 @@ KhaSu Interact Club`;
             const handleBulkHoursAdjust = async () => {
                 if (!bulkHours || selectedUsers.length === 0) return;
                 const promises = selectedUsers.map(uid => {
-                    const p = profiles.find(x => x.userId === uid);
+                    const p = profiles.find(x => x.userId === uid || x.id === uid);
                     return db.collection('hours').add({
-                        userId: uid, userName: p.name, amount: Number(bulkHours),
+                        userId: uid, userName: p ? p.name : 'Member', amount: Number(bulkHours),
                         description: `Admin Adjustment by ${currentUser.name}`, status: 'Approved', timestamp: Date.now()
                     });
                 });
@@ -1811,9 +1944,12 @@ KhaSu Interact Club`;
                                     </div>
                                 </div>
 
-                                <div className="ml-auto">
-                                    <button onClick={handleBulkBan} disabled={selectedUsers.length===0} className="bg-red-600 text-white px-6 py-2 font-black text-xs uppercase tracking-widest border-2 border-transparent hover:bg-black disabled:opacity-50">
-                                        Revoke Selected
+                                <div className="ml-auto flex flex-wrap gap-2">
+                                    <button onClick={handleBulkBan} disabled={selectedUsers.length===0} className="bg-amber-600 text-white px-4 py-2 font-black text-xs uppercase tracking-widest border-2 border-black hover:bg-black disabled:opacity-50">
+                                        Revoke ({selectedUsers.length})
+                                    </button>
+                                    <button onClick={handleBulkPurge} disabled={selectedUsers.length===0} className="bg-red-600 text-white px-4 py-2 font-black text-xs uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_#000] hover:bg-black disabled:opacity-50 flex items-center gap-1.5" title="Completely remove selected members from database with no trace">
+                                        <Trash2 size={14}/> Purge (No Trace)
                                     </button>
                                 </div>
                             </div>
@@ -1830,14 +1966,15 @@ KhaSu Interact Club`;
                                         <th className="p-3 border-r-2 border-gray-700">Sector</th>
                                         <th className="p-3 border-r-2 border-gray-700">Phone & Class</th>
                                         <th className="p-3 border-r-2 border-gray-700">Status</th>
-                                        <th className="p-3">Contact</th>
+                                        <th className="p-3 border-r-2 border-gray-700">Contact</th>
+                                        {isPresident && <th className="p-3 text-center">Action</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {targetProfiles.map((p, index) => {
                                         const isSelected = selectedUsers.includes(p.userId);
                                         return (
-                                            <tr key={p.id} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                                            <tr key={p.id || p.userId} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                                                 {isPresident && (
                                                     <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-center">
                                                         <input 
@@ -1865,14 +2002,30 @@ KhaSu Interact Club`;
                                                 </td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700">
                                                     <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-green-200 text-green-800">
-                                                        {p.status}
+                                                        {p.status || 'Active'}
                                                     </span>
                                                 </td>
-                                                <td className="p-3">
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700">
                                                     <button onClick={() => handleSendEmail(p.email, "KhaSu Interact Update", "")} className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:underline hover:text-black">
                                                         {p.email}
                                                     </button>
                                                 </td>
+                                                {isPresident && (
+                                                    <td className="p-3 text-center">
+                                                        {p.role !== ROLES.PRESIDENT && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    onDeleteMember(p);
+                                                                }}
+                                                                className="p-1.5 bg-red-600 hover:bg-black text-white border-2 border-black shadow-[1px_1px_0px_0px_#000] transition-colors"
+                                                                title="Permanently delete member without trace"
+                                                            >
+                                                                <Trash2 size={14}/>
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                )}
                                             </tr>
                                         )
                                     })}
@@ -1900,7 +2053,7 @@ KhaSu Interact Club`;
 
             const handleSave = async (e) => {
                 e.preventDefault();
-                await db.collection('profiles').doc(profile.userId).update({ name, nickname, avatar, hobbies, skills });
+                await db.collection('profiles').doc(profile.id || profile.userId).update({ name, nickname, avatar, hobbies, skills });
                 setMsg("Profile updated successfully!");
                 setTimeout(() => setMsg(''), 3000);
             };
@@ -2060,7 +2213,7 @@ KhaSu Interact Club`;
                                     <option value="debit">Debit (-)</option>
                                 </select>
                                 <input required type="number" step="100" min="100" placeholder="Amt (₮)" value={amount} onChange={e=>setAmount(e.target.value)} className="bg-white dark:bg-gray-700 border-r-2 sm:border-r-4 sm:border-b-0 border-b-2 border-black p-4 outline-none w-full sm:w-1/4 font-mono font-bold" />
-                                <input required type="text" placeholder="Description" value={desc} onChange={e=>setDesc(e.target.value)} className="bg-white dark:bg-gray-700 border-r-2 sm:border-r-4 sm:border-b-0 border-b-2 border-black p-4 outline-none w-full sm:w-auto flex-1 font-bold" />
+                                <input required type="text" placeholder="Description" value={desc} onChange={e=>setDesc(e.target.value)} className="bg-white dark:bg-gray-700 border-r-2 sm:border-r-4 sm:border-b-0 border-b-2 border-black p-4 outline-none w-full sm:auto flex-1 font-bold" />
                                 <button type="submit" className="bg-[#ec8b3f] hover:bg-black text-white px-8 py-4 font-black uppercase tracking-widest transition-colors">
                                     Log
                                 </button>
