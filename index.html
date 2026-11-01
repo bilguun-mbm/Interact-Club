@@ -66,7 +66,7 @@
         import { 
             ShieldAlert, Calendar, Clock, DollarSign, 
             CheckCircle, XCircle, LogOut, CheckSquare, 
-            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock, Instagram, MessageSquare, Phone
+            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock, Instagram, MessageSquare, Phone, Search, ExternalLink
         } from 'lucide-react';
 
         // ==========================================
@@ -133,6 +133,7 @@
             const [darkMode, setDarkMode] = useState(false);
             const [showTreasuryModal, setShowTreasuryModal] = useState(false);
             const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+            const [viewingMemberProfile, setViewingMemberProfile] = useState(null);
             const [themeTransition, setThemeTransition] = useState(null);
 
             // 1. Auth Listener
@@ -215,6 +216,7 @@
             // --- NAVIGATION CONFIG ---
             const navItems = [
                 { id: 'dashboard', label: 'Dashboard', Icon: CheckSquare },
+                { id: 'members', label: 'Members', Icon: Users },
                 { id: 'events', label: 'Events & Roles', Icon: Calendar },
                 ...(!isPresident ? [{ id: 'hours', label: 'Time Tracking', Icon: Clock }] : []),
                 { id: 'reminders', label: 'My Reminders', Icon: Bell },
@@ -324,13 +326,14 @@
 
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
-                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} isPresident={isPresident} isHead={isHead} />}
+                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} isPresident={isPresident} isHead={isHead} onOpenMemberProfile={setViewingMemberProfile} />}
+                                {activeTab === 'members' && <MembersDirectoryView profiles={profiles} hours={hours} onOpenMemberProfile={setViewingMemberProfile} />}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
                                 {activeTab === 'reminders' && <RemindersView reminders={reminders} profile={profile} />}
-                                {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} />}
+                                {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} profiles={profiles} onOpenMemberProfile={setViewingMemberProfile} />}
                                 {activeTab === 'hours' && !isPresident && <HoursView hours={hours} profile={profile} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
-                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} />}
+                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} onOpenMemberProfile={setViewingMemberProfile} />}
                             </main>
 
                         </div>
@@ -342,6 +345,13 @@
                     )}
                     {showFeedbackModal && (
                         <FeedbackModal onClose={() => setShowFeedbackModal(false)} profile={profile} />
+                    )}
+                    {viewingMemberProfile && (
+                        <MemberProfileModal 
+                            profile={viewingMemberProfile} 
+                            hours={hours} 
+                            onClose={() => setViewingMemberProfile(null)} 
+                        />
                     )}
                 </div>
             );
@@ -396,6 +406,273 @@
                             willChange: 'transform'
                         }}
                     />
+                </div>
+            );
+        }
+
+        // ==========================================
+        // MEMBERS DIRECTORY & COMPLETE PROFILE VIEW
+        // ==========================================
+        function MembersDirectoryView({ profiles, hours, onOpenMemberProfile }) {
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedSector, setSelectedSector] = useState('All');
+
+            // Filter out Removed members
+            const activeMembers = profiles.filter(p => p.status !== 'Removed');
+
+            const filteredMembers = activeMembers.filter(p => {
+                const term = searchTerm.toLowerCase().trim();
+                const matchesName = p.name && p.name.toLowerCase().includes(term);
+                const matchesNick = p.nickname && p.nickname.toLowerCase().includes(term);
+                const matchesClass = p.schoolClass && p.schoolClass.toLowerCase().includes(term);
+                const matchesSearch = term === '' || matchesName || matchesNick || matchesClass;
+
+                const matchesSector = selectedSector === 'All' || p.sector === selectedSector;
+                return matchesSearch && matchesSector;
+            });
+
+            return (
+                <div className="space-y-8 animate-fade-in-up">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-l-8 border-[#433f92] pl-4">
+                        <div>
+                            <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">Club Directory</h1>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Discover, connect with, and view complete dossiers of fellow members</p>
+                        </div>
+                        <span className="font-mono text-xs font-bold px-3 py-1 bg-black text-white self-start md:self-auto uppercase">
+                            {filteredMembers.length} Active {filteredMembers.length === 1 ? 'Member' : 'Members'}
+                        </span>
+                    </div>
+
+                    {/* Search & Sector Filters */}
+                    <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_#433f92] space-y-4">
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                            <input 
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Search by name, nickname, or class (e.g. Bilgee, Anand, 11A)..."
+                                className="w-full pl-12 pr-4 py-3 border-2 border-black dark:border-gray-600 bg-gray-50 dark:bg-gray-900 font-bold text-sm outline-none focus:border-[#ec8b3f]"
+                            />
+                            {searchTerm && (
+                                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-400 hover:text-black dark:hover:text-white">
+                                    CLEAR
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Sector Filter Chips */}
+                        <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                            {['All', ...SECTORS].map(sec => (
+                                <button
+                                    key={sec}
+                                    onClick={() => setSelectedSector(sec)}
+                                    className={`px-3 py-1 text-xs font-black uppercase tracking-widest border-2 border-black transition-transform ${selectedSector === sec ? 'bg-[#ec8b3f] text-black shadow-[2px_2px_0px_0px_#000] -translate-y-0.5' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-white'}`}
+                                >
+                                    {sec}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Members Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredMembers.map(m => {
+                            const userApprovedHours = hours
+                                .filter(h => h.userId === m.userId && h.status === 'Approved')
+                                .reduce((acc, h) => acc + Number(h.amount), 0);
+
+                            return (
+                                <div 
+                                    key={m.id || m.userId}
+                                    onClick={() => onOpenMemberProfile(m)}
+                                    className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[8px_8px_0px_0px_#ec8b3f] hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className="flex items-start gap-4 mb-4">
+                                            <div className="w-14 h-14 bg-black border-2 border-black text-white flex items-center justify-center font-black text-xl shrink-0 overflow-hidden">
+                                                {m.avatar ? (
+                                                    <img src={m.avatar} alt="avatar" className="w-full h-full object-cover"/>
+                                                ) : (
+                                                    m.nickname ? m.nickname.charAt(0).toUpperCase() : m.name.charAt(0).toUpperCase()
+                                                )}
+                                            </div>
+                                            <div className="overflow-hidden flex-1">
+                                                <h3 className="font-black text-lg uppercase tracking-tight truncate leading-tight">{m.name}</h3>
+                                                {m.nickname && (
+                                                    <p className="text-xs font-bold text-[#ec8b3f] font-mono truncate">"{m.nickname}"</p>
+                                                )}
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-1 truncate">{m.role}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1 text-xs font-mono pt-3 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-500 font-bold uppercase text-[10px]">Sector:</span>
+                                                <span className="font-bold truncate max-w-[170px]">{m.sector}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-500 font-bold uppercase text-[10px]">Class:</span>
+                                                <span className="font-black uppercase">{m.schoolClass || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-500 font-bold uppercase text-[10px]">Service Time:</span>
+                                                <span className="font-black text-[#433f92] dark:text-[#a09df0]">{userApprovedHours} hrs</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-5 pt-3 border-t-2 border-black flex items-center justify-between text-xs font-black uppercase text-[#433f92] dark:text-[#a09df0]">
+                                        <span>View Complete Profile</span>
+                                        <ChevronLeft size={16} className="rotate-180" />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {filteredMembers.length === 0 && (
+                        <div className="p-12 border-4 border-black bg-white dark:bg-gray-800 text-center space-y-2">
+                            <p className="font-black text-xl uppercase tracking-tighter">No members found</p>
+                            <p className="text-sm font-mono text-gray-500">No member matches your search "{searchTerm}". Try a different name or nickname.</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- COMPLETE MEMBER DOSSIER / PROFILE MODAL ---
+        function MemberProfileModal({ profile, hours, onClose }) {
+            const userApprovedHours = hours
+                .filter(h => h.userId === profile.userId && h.status === 'Approved')
+                .reduce((acc, h) => acc + Number(h.amount), 0);
+
+            const userApprovedList = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-[#f4f4f0] dark:bg-gray-900 border-4 border-black w-full max-w-2xl shadow-[16px_16px_0px_0px_#ec8b3f] animate-fade-in-up max-h-[92vh] overflow-y-auto custom-scrollbar">
+                        
+                        {/* Header */}
+                        <div className="p-5 bg-black text-white flex justify-between items-center border-b-4 border-black sticky top-0 z-10">
+                            <div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-[#ec8b3f] block">KhaSu Member Dossier</span>
+                                <h2 className="font-black text-2xl uppercase tracking-tighter truncate">{profile.name}</h2>
+                            </div>
+                            <button onClick={onClose} className="p-1 hover:text-[#ec8b3f] transition-colors"><XCircle size={28}/></button>
+                        </div>
+
+                        <div className="p-6 md:p-8 space-y-6">
+                            
+                            {/* Top Card: Avatar + Primary Identity */}
+                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[6px_6px_0px_0px_#433f92]">
+                                <div className="w-28 h-28 bg-black text-white border-4 border-black flex items-center justify-center font-black text-4xl overflow-hidden shrink-0 shadow-[4px_4px_0px_0px_#ec8b3f]">
+                                    {profile.avatar ? (
+                                        <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover"/>
+                                    ) : (
+                                        profile.nickname ? profile.nickname.charAt(0).toUpperCase() : profile.name.charAt(0).toUpperCase()
+                                    )}
+                                </div>
+                                <div className="flex-1 text-center sm:text-left space-y-2">
+                                    <div>
+                                        <h3 className="text-3xl font-black uppercase tracking-tight">{profile.name}</h3>
+                                        {profile.nickname && (
+                                            <p className="text-sm font-black text-[#ec8b3f] uppercase font-mono">Known As: "{profile.nickname}"</p>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                                        <span className="px-3 py-1 bg-[#433f92] text-white text-xs font-black uppercase tracking-widest">
+                                            {profile.role}
+                                        </span>
+                                        <span className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-xs font-black uppercase tracking-widest border border-black">
+                                            {profile.sector}
+                                        </span>
+                                        {profile.schoolClass && (
+                                            <span className="px-3 py-1 bg-amber-300 text-black text-xs font-black uppercase tracking-widest border border-black">
+                                                Class {profile.schoolClass}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Stats & Verification Banner */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                <div className="bg-white dark:bg-gray-800 border-2 border-black p-4 text-center">
+                                    <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest block mb-1">Total Hours</span>
+                                    <span className="text-3xl font-black text-[#433f92] dark:text-[#a09df0]">{userApprovedHours} <span className="text-sm">hrs</span></span>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 border-2 border-black p-4 text-center">
+                                    <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest block mb-1">Status</span>
+                                    <span className="text-xl font-black uppercase text-green-600 block mt-1">{profile.status || 'Active'}</span>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 border-2 border-black p-4 text-center col-span-2 sm:col-span-1">
+                                    <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest block mb-1">Joined</span>
+                                    <span className="text-xs font-mono font-bold block mt-2 text-gray-600 dark:text-gray-300">
+                                        {profile.joinedAt ? new Date(profile.joinedAt).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Contact Dossier */}
+                            <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 space-y-3">
+                                <h4 className="text-xs font-black uppercase tracking-widest border-b-2 border-black pb-2 text-gray-500">Contact & Institutional Channels</h4>
+                                
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-900 border-2 border-black">
+                                        <span className="text-[10px] font-black uppercase text-gray-500 block mb-1 flex items-center gap-1.5"><Mail size={12}/> School Email</span>
+                                        <a href={`mailto:${profile.email}`} className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline break-all">
+                                            {profile.email}
+                                        </a>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-900 border-2 border-black">
+                                        <span className="text-[10px] font-black uppercase text-gray-500 block mb-1 flex items-center gap-1.5"><Phone size={12}/> Phone Number</span>
+                                        {profile.phone ? (
+                                            <a href={`tel:${profile.phone}`} className="text-xs font-mono font-bold hover:underline">
+                                                {profile.phone}
+                                            </a>
+                                        ) : (
+                                            <span className="text-xs font-mono text-gray-400">Not provided</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Hobbies & Skills */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div className="bg-white dark:bg-gray-800 border-4 border-black p-5">
+                                    <h4 className="text-xs font-black uppercase tracking-widest border-b-2 border-black pb-2 mb-3">Hobbies & Passions</h4>
+                                    <p className="font-mono text-xs leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                        {profile.hobbies || <span className="italic text-gray-400">No hobbies listed yet.</span>}
+                                    </p>
+                                </div>
+
+                                <div className="bg-white dark:bg-gray-800 border-4 border-black p-5">
+                                    <h4 className="text-xs font-black uppercase tracking-widest border-b-2 border-black pb-2 mb-3">Skills & Capabilities</h4>
+                                    <p className="font-mono text-xs leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                        {profile.skills || <span className="italic text-gray-400">No skills listed yet.</span>}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Service Records Log */}
+                            <div className="bg-white dark:bg-gray-800 border-4 border-black p-5">
+                                <h4 className="text-xs font-black uppercase tracking-widest border-b-2 border-black pb-2 mb-3">Approved Service Logs ({userApprovedList.length})</h4>
+                                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                                    {userApprovedList.map(h => (
+                                        <div key={h.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                                            <span className="font-bold truncate mr-2">{h.description}</span>
+                                            <span className="font-mono font-black text-[#433f92] dark:text-[#a09df0] shrink-0">+{h.amount} hrs</span>
+                                        </div>
+                                    ))}
+                                    {userApprovedList.length === 0 && (
+                                        <p className="text-xs font-mono text-gray-400 italic">No approved service logs on record yet.</p>
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
                 </div>
             );
         }
@@ -563,7 +840,7 @@
         }
 
         // --- CALENDAR & RECRUITMENT COMPONENT ---
-        function DashboardCalendar({ events, eventRecruitments, profile, reminders = [] }) {
+        function DashboardCalendar({ events, eventRecruitments, profile, reminders = [], profiles = [], onOpenMemberProfile }) {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedEvent, setSelectedEvent] = useState(null);
             
@@ -715,6 +992,29 @@
                                                         </div>
                                                     </div>
                                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Sector: {r.sector}</p>
+                                                    
+                                                    {/* Applicants clickable list */}
+                                                    {r.applicants && r.applicants.length > 0 && (
+                                                        <div className="mb-3 pt-2 border-t border-dashed border-gray-300 dark:border-gray-600">
+                                                            <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Registered Members (click to view):</p>
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {r.applicants.map(uid => {
+                                                                    const appProfile = profiles.find(p => p.userId === uid);
+                                                                    if (!appProfile) return null;
+                                                                    return (
+                                                                        <button 
+                                                                            key={uid} 
+                                                                            onClick={(e) => { e.stopPropagation(); onOpenMemberProfile && onOpenMemberProfile(appProfile); }}
+                                                                            className="text-[10px] font-bold uppercase bg-gray-100 dark:bg-gray-800 hover:bg-[#ec8b3f] hover:text-black px-2 py-0.5 border border-black transition-colors"
+                                                                        >
+                                                                            {appProfile.nickname || appProfile.name}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-sm font-mono">{applicantCount} / {r.capacity} Filled</span>
                                                         <button 
@@ -741,7 +1041,7 @@
         }
 
         // --- DASHBOARD VIEW ---
-        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news, reminders, isPresident, isHead }) {
+        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news, reminders, isPresident, isHead, onOpenMemberProfile }) {
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
@@ -749,7 +1049,7 @@
             const activeUserIds = profiles.filter(p => p.status === 'Active').map(p => p.userId);
             const allApproved = hours.filter(h => h.status === 'Approved' && activeUserIds.includes(h.userId));
             const leaderboard = Object.values(allApproved.reduce((acc, h) => {
-                acc[h.userId] = acc[h.userId] || { name: h.userName, total: 0 };
+                acc[h.userId] = acc[h.userId] || { userId: h.userId, name: h.userName, total: 0 };
                 acc[h.userId].total += Number(h.amount);
                 return acc;
             }, {})).sort((a,b) => b.total - a.total).slice(0, 5);
@@ -862,7 +1162,7 @@
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-8">
-                            <DashboardCalendar events={events || []} eventRecruitments={eventRecruitments} profile={profile} reminders={reminders} />
+                            <DashboardCalendar events={events || []} eventRecruitments={eventRecruitments} profile={profile} reminders={reminders} profiles={profiles} onOpenMemberProfile={onOpenMemberProfile} />
                             
                             {/* ANNOUNCEMENTS & NEWS FEED */}
                             <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
@@ -912,15 +1212,27 @@
                             </div>
                         </div>
                         
+                        {/* Leaderboard with Clickable Profiles */}
                         <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] h-full max-h-[500px]">
-                            <h2 className="text-xl font-black uppercase tracking-widest mb-4 border-b-2 border-black pb-2">Top Volunteers</h2>
+                            <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
+                                <h2 className="text-xl font-black uppercase tracking-widest">Top Volunteers</h2>
+                                <span className="text-[10px] font-mono text-gray-400 uppercase">Click name</span>
+                            </div>
                             <div className="space-y-2">
-                                {leaderboard.map((u, i) => (
-                                    <div key={i} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 border-2 border-transparent hover:border-[#ec8b3f] transition-colors">
-                                        <span className="font-bold">{i+1}. {u.name}</span>
-                                        <span className="font-black text-[#433f92] dark:text-[#a09df0]">{u.total} hrs</span>
-                                    </div>
-                                ))}
+                                {leaderboard.map((u, i) => {
+                                    const memberProf = profiles.find(p => p.userId === u.userId);
+                                    return (
+                                        <div 
+                                            key={i} 
+                                            onClick={() => memberProf && onOpenMemberProfile(memberProf)}
+                                            className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 border-2 border-transparent hover:border-[#ec8b3f] hover:translate-x-1 cursor-pointer transition-all"
+                                            title="Click to view complete profile"
+                                        >
+                                            <span className="font-bold">{i+1}. {u.name}</span>
+                                            <span className="font-black text-[#433f92] dark:text-[#a09df0]">{u.total} hrs</span>
+                                        </div>
+                                    );
+                                })}
                                 {leaderboard.length === 0 && <p className="text-gray-500 font-mono text-sm">No approved hours yet.</p>}
                             </div>
                         </div>
@@ -930,7 +1242,7 @@
         }
 
         // --- EVENTS & TIMELINE VIEW ---
-        function EventsView({ events, eventIdeas, profile, isPresident, isHead, eventRecruitments }) {
+        function EventsView({ events, eventIdeas, profile, isPresident, isHead, eventRecruitments, profiles, onOpenMemberProfile }) {
             const [title, setTitle] = useState('');
             const [date, setDate] = useState('');
             const [description, setDescription] = useState('');
@@ -1359,7 +1671,7 @@
         }
 
         // --- ADMIN & SPREADSHEET VIEW ---
-        function AdminView({ profiles, isPresident, reports, currentUser, eventRecruitments }) {
+        function AdminView({ profiles, isPresident, reports, currentUser, eventRecruitments, onOpenMemberProfile }) {
             const [selectedUsers, setSelectedUsers] = useState([]);
             const [lastChecked, setLastChecked] = useState(null);
             
@@ -1533,7 +1845,15 @@ KhaSu Interact Club`;
                                                         />
                                                     </td>
                                                 )}
-                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">{p.name} {p.nickname && <span className="text-gray-500 lowercase font-mono">({p.nickname})</span>}</td>
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">
+                                                    <button 
+                                                        onClick={() => onOpenMemberProfile && onOpenMemberProfile(p)}
+                                                        className="hover:text-[#ec8b3f] hover:underline text-left"
+                                                        title="Click to view complete profile"
+                                                    >
+                                                        {p.name} {p.nickname && <span className="text-gray-500 lowercase font-mono">({p.nickname})</span>}
+                                                    </button>
+                                                </td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-black text-[#ec8b3f] tracking-widest uppercase">{p.role}</td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-mono font-bold">{p.sector}</td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-mono">
