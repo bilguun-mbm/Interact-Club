@@ -37,12 +37,12 @@
         .animate-fade-in-up { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     </style>
 
-    <!-- Firebase Compat SDKs -->
+    <!-- Firebase Compat SDKs (Stable for single-file HTML) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-    <!-- ES Module Import Map for React/Lucide -->
+    <!-- ES Module Import Map for React and Lucide Icons -->
     <script type="importmap">
     {
         "imports": {
@@ -53,7 +53,7 @@
     }
     </script>
     
-    <!-- Babel for JSX Compilation -->
+    <!-- Babel for In-Browser JSX Compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
@@ -202,7 +202,7 @@
             };
 
             // --- IDENTITY GATE ---
-            if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-[#F4F4F0] font-black uppercase tracking-widest">Verifying Connection...</div>;
+            if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-[#F4F4F0] dark:bg-[#111] font-black uppercase tracking-widest text-[#433f92]">Connecting to Portal...</div>;
             
             if (!user || !profile) {
                 return <IdentityGate profiles={profiles} />;
@@ -276,12 +276,12 @@
                                 </div>
                             </div>
                             
-                            <div className="px-4 py-2 border-t-2 border-gray-900 dark:border-gray-200 flex flex-col gap-2">
-                                <a href="https://www.instagram.com/orkhonkhasu_interactclub_?utm_source=ig_web_button_share_sheet&mdxt=ZDNlZDc0MzIxNw==" target="_blank" rel="noopener noreferrer" className={`p-2 brutal-border bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white uppercase text-xs font-black flex items-center justify-center gap-2 ${!sidebarOpen ? 'px-0' : ''}`} title="Instagram">
+                            <div className="px-3 py-3 border-t-2 border-gray-900 dark:border-gray-200 flex flex-col gap-2">
+                                <a href="https://www.instagram.com/orkhonkhasu_interactclub_?utm_source=ig_web_button_share_sheet&mdxt=ZDNlZDc0MzIxNw==" target="_blank" rel="noopener noreferrer" className={`p-2 border-2 border-black bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white uppercase text-xs font-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-[2px_2px_0px_0px_#000] ${!sidebarOpen ? 'px-0' : ''}`} title="Instagram">
                                     <Instagram size={16} /> {sidebarOpen && <span>Instagram</span>}
                                 </a>
-                                <button onClick={() => setShowFeedbackModal(true)} className={`p-2 brutal-border bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white uppercase text-xs font-black flex items-center justify-center gap-2 ${!sidebarOpen ? 'px-0' : ''}`} title="Feedback to Devs">
-                                    <MessageSquare size={16} /> {sidebarOpen && <span>Feedback</span>}
+                                <button onClick={() => setShowFeedbackModal(true)} className={`p-2 border-2 border-black bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white uppercase text-xs font-black flex items-center justify-center gap-2 hover:bg-black hover:text-white transition-colors shadow-[2px_2px_0px_0px_#000] ${!sidebarOpen ? 'px-0' : ''}`} title="Feedback to Devs">
+                                    <MessageSquare size={16} /> {sidebarOpen && <span>Dev Feedback</span>}
                                 </button>
                             </div>
 
@@ -292,7 +292,7 @@
                             >
                                 <div className={`flex items-center ${sidebarOpen ? 'gap-3' : 'justify-center'} `}>
                                     <div className="w-10 h-10 rounded-none bg-black border-2 border-white text-white flex items-center justify-center font-bold overflow-hidden shrink-0">
-                                        {profile.avatar ? <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover"/> : (profile.nickname ? profile.nickname.charAt(0) : profile.name.charAt(0))}
+                                        {profile.avatar ? <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover"/> : (profile.nickname ? profile.nickname.charAt(0).toUpperCase() : profile.name.charAt(0).toUpperCase())}
                                     </div>
                                     {sidebarOpen && (
                                         <div className="overflow-hidden">
@@ -330,7 +330,7 @@
                                 {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} />}
                                 {activeTab === 'hours' && !isPresident && <HoursView hours={hours} profile={profile} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
-                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} />}
+                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} />}
                             </main>
 
                         </div>
@@ -348,25 +348,30 @@
         }
 
         // ==========================================
-        // DYNAMIC BACKGROUND FX (Optimized for performance)
+        // DYNAMIC BACKGROUND FX (High Performance DOM)
         // ==========================================
         function BackgroundFX({ darkMode }) {
             const glow1Ref = useRef(null);
             const glow2Ref = useRef(null);
 
             useEffect(() => {
+                let rafId;
                 const handleMouseMove = (e) => {
-                    requestAnimationFrame(() => {
+                    cancelAnimationFrame(rafId);
+                    rafId = requestAnimationFrame(() => {
                         if (glow1Ref.current) {
-                            glow1Ref.current.style.transform = `translate(${e.clientX - (window.innerWidth*0.3)}px, ${e.clientY - (window.innerWidth*0.3)}px)`;
+                            glow1Ref.current.style.transform = `translate3d(${e.clientX - (window.innerWidth*0.3)}px, ${e.clientY - (window.innerWidth*0.3)}px, 0)`;
                         }
                         if (glow2Ref.current) {
-                            glow2Ref.current.style.transform = `translate(${e.clientX - (window.innerWidth*0.2) + 100}px, ${e.clientY - (window.innerWidth*0.2) - 100}px)`;
+                            glow2Ref.current.style.transform = `translate3d(${e.clientX - (window.innerWidth*0.2) + 100}px, ${e.clientY - (window.innerWidth*0.2) - 100}px, 0)`;
                         }
                     });
                 };
-                window.addEventListener('mousemove', handleMouseMove);
-                return () => window.removeEventListener('mousemove', handleMouseMove);
+                window.addEventListener('mousemove', handleMouseMove, { passive: true });
+                return () => {
+                    window.removeEventListener('mousemove', handleMouseMove);
+                    cancelAnimationFrame(rafId);
+                };
             }, []);
 
             return (
@@ -375,7 +380,7 @@
                     
                     <div 
                         ref={glow1Ref}
-                        className="absolute rounded-full blur-[100px] opacity-75 dark:opacity-50 transition-transform duration-100 ease-out saturate-200"
+                        className="absolute rounded-full blur-[100px] opacity-75 dark:opacity-50 saturate-200 pointer-events-none transition-transform duration-75 ease-out"
                         style={{ 
                             width: '60vw', height: '60vw',
                             background: 'radial-gradient(circle, #433f92 0%, transparent 70%)',
@@ -384,7 +389,7 @@
                     />
                     <div 
                         ref={glow2Ref}
-                        className="absolute rounded-full blur-[80px] opacity-60 dark:opacity-30 transition-transform duration-150 ease-out saturate-200"
+                        className="absolute rounded-full blur-[80px] opacity-60 dark:opacity-35 saturate-200 pointer-events-none transition-transform duration-100 ease-out"
                         style={{ 
                             width: '40vw', height: '40vw',
                             background: 'radial-gradient(circle, #ec8b3f 0%, transparent 70%)',
@@ -396,9 +401,8 @@
         }
 
         // ==========================================
-        // VIEWS & COMPONENTS
+        // IDENTITY GATE & REGISTRATION
         // ==========================================
-
         function IdentityGate({ profiles }) {
             const [isLogin, setIsLogin] = useState(true);
             const [email, setEmail] = useState('');
@@ -446,9 +450,9 @@
                         if (!email.endsWith('@orkhonschool.edu.mn')) {
                             throw new Error("Only @orkhonschool.edu.mn emails are allowed to register.");
                         }
-                        const exists = profiles.some(p => p.email === email);
+                        const exists = profiles.some(p => p.email.toLowerCase() === email.toLowerCase());
                         if (exists) throw new Error("Email already registered. Please login.");
-                        if (!phone || !schoolClass) throw new Error("Phone and Class are required.");
+                        if (!phone || !schoolClass) throw new Error("Phone number and School Class are mandatory.");
                         
                         // Create Auth User
                         const cred = await auth.createUserWithEmailAndPassword(email, password);
@@ -472,7 +476,7 @@
 
             return (
                 <div className="min-h-screen bg-[#F4F4F0] flex items-center justify-center p-6 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA0MCAwIEwgMCAwIDAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgwLDAsMCwwLjA1KSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]">
-                    <div className="bg-white p-8 border-4 border-black w-full max-w-md shadow-[12px_12px_0px_0px_#433f92] animate-fade-in-up max-h-[90vh] overflow-y-auto custom-scrollbar">
+                    <div className="bg-white p-8 border-4 border-black w-full max-w-md shadow-[12px_12px_0px_0px_#433f92] animate-fade-in-up max-h-[92vh] overflow-y-auto custom-scrollbar">
                         <h1 className="text-3xl font-black mb-2 text-[#433f92] uppercase tracking-tighter">KhaSu Interact</h1>
                         <p className="text-sm font-bold text-gray-500 mb-8 border-b-2 border-black pb-4 uppercase tracking-widest">
                             {isLogin ? 'Establish Identity' : 'Submit Application'}
@@ -503,11 +507,11 @@
                                     <div className="flex gap-3">
                                         <div className="flex-1">
                                             <label className="block text-xs uppercase font-black text-black mb-1">Phone Number</label>
-                                            <input required type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="e.g., 99112233" className="w-full border-2 border-gray-300 rounded-none p-3 outline-none focus:border-[#433f92] font-mono text-sm" />
+                                            <input required type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="99112233" className="w-full border-2 border-gray-300 rounded-none p-3 outline-none focus:border-[#433f92] font-mono text-sm" />
                                         </div>
                                         <div className="flex-1">
                                             <label className="block text-xs uppercase font-black text-black mb-1">Class</label>
-                                            <input required type="text" value={schoolClass} onChange={e=>setSchoolClass(e.target.value)} placeholder="e.g., 11A" className="w-full border-2 border-gray-300 rounded-none p-3 outline-none focus:border-[#433f92] font-bold uppercase text-sm" />
+                                            <input required type="text" value={schoolClass} onChange={e=>setSchoolClass(e.target.value)} placeholder="11A, 10B..." className="w-full border-2 border-gray-300 rounded-none p-3 outline-none focus:border-[#433f92] font-bold uppercase text-sm" />
                                         </div>
                                     </div>
                                     <div className="flex gap-3">
@@ -553,12 +557,12 @@
                 <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
                     <ShieldAlert size={64} className="text-red-600 mb-6" />
                     <h1 className="text-4xl font-black text-white uppercase tracking-widest mb-4">Access Revoked</h1>
-                    <p className="text-gray-400 max-w-md font-mono">Your membership has been terminated by the administration. You no longer have access to the KhaSu Interact Portal.</p>
+                    <p className="text-gray-400 max-w-md font-mono">Your membership status has been updated by the administration. You no longer have active access to the KhaSu Interact Portal.</p>
                 </div>
             );
         }
 
-        // --- CALENDAR COMPONENT ---
+        // --- CALENDAR & RECRUITMENT COMPONENT ---
         function DashboardCalendar({ events, eventRecruitments, profile, reminders = [] }) {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedEvent, setSelectedEvent] = useState(null);
@@ -592,7 +596,7 @@
 
             const handleApply = async (recruitment) => {
                 if (recruitment.applicants && recruitment.applicants.includes(profile.userId)) {
-                    alert("You have already applied for this role.");
+                    alert("You have already registered for this role.");
                     return;
                 }
                 const updatedApplicants = [...(recruitment.applicants || []), profile.userId];
@@ -741,7 +745,9 @@
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
-            const allApproved = hours.filter(h => h.status === 'Approved');
+            // Only active users appear on leaderboard
+            const activeUserIds = profiles.filter(p => p.status === 'Active').map(p => p.userId);
+            const allApproved = hours.filter(h => h.status === 'Approved' && activeUserIds.includes(h.userId));
             const leaderboard = Object.values(allApproved.reduce((acc, h) => {
                 acc[h.userId] = acc[h.userId] || { name: h.userName, total: 0 };
                 acc[h.userId].total += Number(h.amount);
@@ -752,7 +758,7 @@
             const [newsText, setNewsText] = useState('');
             const [newsImage, setNewsImage] = useState(null);
             
-            // President Notification & Pending Approvals
+            // Pending Hours for President / Head
             const pendingHours = hours.filter(h => h.status === 'Pending');
             const prevPendingCount = useRef(pendingHours.length);
 
@@ -766,7 +772,7 @@
                 if (isPresident && pendingHours.length > prevPendingCount.current) {
                     if (Notification.permission === "granted") {
                         new Notification("KhaSu Interact Portal", {
-                            body: "A member has submitted new volunteer hours for approval."
+                            body: "A member has submitted volunteer hours for verification."
                         });
                     }
                 }
@@ -792,7 +798,7 @@
                         canvas.height = img.height * scale;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        setNewsImage(canvas.toDataURL('image/jpeg', 0.6)); // Compressed Base64
+                        setNewsImage(canvas.toDataURL('image/jpeg', 0.6));
                     };
                     img.src = event.target.result;
                 };
@@ -819,18 +825,20 @@
                 <div className="space-y-8 animate-fade-in-up">
                     <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-[#ec8b3f] pl-4">Overview</h1>
                     
-                    {/* PRESIDENT PENDING HOURS ALERT BLOCK */}
+                    {/* PRESIDENT PENDING HOURS APPROVAL CARD */}
                     {(isPresident || isHead) && pendingHours.length > 0 && (
                         <div className="bg-amber-50 dark:bg-amber-900/20 border-4 border-amber-500 p-6 shadow-[8px_8px_0px_0px_#f59e0b]">
-                            <h2 className="text-xl font-black uppercase tracking-widest mb-4 text-amber-700 dark:text-amber-500">Action Required: Pending Approvals</h2>
+                            <h2 className="text-xl font-black uppercase tracking-widest mb-4 text-amber-700 dark:text-amber-500 flex items-center gap-2">
+                                <Clock size={20}/> Action Required: Pending Volunteer Hours ({pendingHours.length})
+                            </h2>
                             <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
                                 {pendingHours.map(h => (
                                     <div key={h.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 border-2 border-amber-500">
                                         <div>
-                                            <p className="font-bold">{h.userName} <span className="text-amber-600">({h.amount} hrs)</span></p>
+                                            <p className="font-bold">{h.userName} <span className="text-amber-600 font-mono">({h.amount} hrs)</span></p>
                                             <p className="text-sm text-gray-500 font-mono">{h.description}</p>
                                         </div>
-                                        <button onClick={() => handleApproveHour(h.id)} className="bg-amber-500 hover:bg-black text-white px-4 py-2 font-black uppercase text-xs tracking-widest transition-colors border-2 border-transparent">Approve</button>
+                                        <button onClick={() => handleApproveHour(h.id)} className="bg-amber-500 hover:bg-black text-white px-5 py-2 font-black uppercase text-xs tracking-widest transition-colors border-2 border-transparent">Approve</button>
                                     </div>
                                 ))}
                             </div>
@@ -876,7 +884,7 @@
                                                 <Camera size={18} /> Attach Photo
                                                 <input type="file" id="news-file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                                             </label>
-                                            <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-6 py-2 font-black uppercase tracking-widest border-2 border-transparent">Post</button>
+                                            <button type="submit" className="bg-[#433f92] hover:bg-black text-white px-6 py-2 font-black uppercase tracking-widest border-2 border-transparent">Post Announcement</button>
                                         </div>
                                     </form>
                                 )}
@@ -899,7 +907,7 @@
                                             )}
                                         </div>
                                     ))}
-                                    {news.length === 0 && <p className="text-gray-500 font-mono text-sm">No announcements yet.</p>}
+                                    {news.length === 0 && <p className="text-gray-500 font-mono text-sm">No announcements posted yet.</p>}
                                 </div>
                             </div>
                         </div>
@@ -921,7 +929,7 @@
             );
         }
 
-        // --- EVENTS VIEW ---
+        // --- EVENTS & TIMELINE VIEW ---
         function EventsView({ events, eventIdeas, profile, isPresident, isHead, eventRecruitments }) {
             const [title, setTitle] = useState('');
             const [date, setDate] = useState('');
@@ -1015,7 +1023,7 @@
                 <div className="space-y-12 animate-fade-in-up">
                     <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-[#ec8b3f] pl-4">Events & Recruitment</h1>
                     
-                    {/* CALENDAR DISPLAY (List View for Events view) */}
+                    {/* CALENDAR DISPLAY */}
                     <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
                         <h2 className="text-xl font-black uppercase tracking-widest mb-6 border-b-2 border-black pb-2">Academic Year Timeline</h2>
                         {events.length === 0 ? (
@@ -1224,7 +1232,7 @@
             );
         }
 
-        // --- HOURS VIEW ---
+        // --- HOURS VIEW (Non-presidents only) ---
         function HoursView({ hours, profile, profiles }) {
             const pendingHours = hours.filter(h => h.status === 'Pending' && h.userId === profile.userId);
             const myHours = hours.filter(h => h.userId === profile.userId);
@@ -1267,7 +1275,7 @@
                                     <div key={h.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 border-2 border-amber-500">
                                         <div>
                                             <p className="font-bold">{h.userName} - {h.amount} hrs</p>
-                                            <p className="text-sm text-gray-500">{h.description}</p>
+                                            <p className="text-sm text-gray-500 font-mono">{h.description}</p>
                                         </div>
                                         <span className="text-xs font-black uppercase tracking-widest px-2 py-1 bg-amber-100 text-amber-700">Pending</span>
                                     </div>
@@ -1351,15 +1359,15 @@
         }
 
         // --- ADMIN & SPREADSHEET VIEW ---
-        function AdminView({ profiles, isPresident, reports, currentUser }) {
+        function AdminView({ profiles, isPresident, reports, currentUser, eventRecruitments }) {
             const [selectedUsers, setSelectedUsers] = useState([]);
             const [lastChecked, setLastChecked] = useState(null);
             
             const [bulkSector, setBulkSector] = useState('');
             const [bulkHours, setBulkHours] = useState('');
 
-            // Filter out other Presidents (so they cannot be mass-selected/edited by each other)
-            const targetProfiles = profiles.filter(p => p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT);
+            // Hide removed members and filter out other Presidents
+            const targetProfiles = profiles.filter(p => p.status !== 'Removed' && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
 
             const handleSendEmail = (targetEmail, subject, body) => {
                 window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}
@@ -1397,13 +1405,21 @@ KhaSu Interact Club`;
                 else setSelectedUsers([]);
             };
 
-            // --- BULK ACTIONS ---
+            // --- BULK ACTIONS (Soft-Ban / Revoke: removes from registers & spreadsheet, preserves account) ---
             const handleBulkBan = async () => {
-                if (!window.confirm(`Permanently ban ${selectedUsers.length} selected users?`)) return;
-                const promises = selectedUsers.map(id => db.collection('profiles').doc(id).update({ status: 'Removed' }));
-                await Promise.all(promises);
+                if (!window.confirm(`Revoke portal access for ${selectedUsers.length} selected users? (Their account and historical logs remain safe in Firebase, but their event registrations will be freed up)`)) return;
+                
+                for (const uid of selectedUsers) {
+                    await db.collection('profiles').doc(uid).update({ status: 'Removed' });
+                    
+                    const recsToUpdate = (eventRecruitments || []).filter(r => r.applicants && r.applicants.includes(uid));
+                    for (const r of recsToUpdate) {
+                        const newApps = r.applicants.filter(id => id !== uid);
+                        await db.collection('eventRecruitments').doc(r.id).update({ applicants: newApps });
+                    }
+                }
                 setSelectedUsers([]);
-                alert("Users removed.");
+                alert("Access revoked and event spots cleared.");
             };
 
             const handleBulkSectorChange = async () => {
@@ -1482,7 +1498,7 @@ KhaSu Interact Club`;
 
                                 <div className="ml-auto">
                                     <button onClick={handleBulkBan} disabled={selectedUsers.length===0} className="bg-red-600 text-white px-6 py-2 font-black text-xs uppercase tracking-widest border-2 border-transparent hover:bg-black disabled:opacity-50">
-                                        Ban Selected
+                                        Revoke Selected
                                     </button>
                                 </div>
                             </div>
@@ -1506,7 +1522,7 @@ KhaSu Interact Club`;
                                     {targetProfiles.map((p, index) => {
                                         const isSelected = selectedUsers.includes(p.userId);
                                         return (
-                                            <tr key={p.id} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'} ${p.status === 'Removed' ? 'opacity-50' : ''}`}>
+                                            <tr key={p.id} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                                                 {isPresident && (
                                                     <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-center">
                                                         <input 
@@ -1517,7 +1533,7 @@ KhaSu Interact Club`;
                                                         />
                                                     </td>
                                                 )}
-                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">{p.name} {p.nickname && <span className="text-gray-500">({p.nickname})</span>}</td>
+                                                <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">{p.name} {p.nickname && <span className="text-gray-500 lowercase font-mono">({p.nickname})</span>}</td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-black text-[#ec8b3f] tracking-widest uppercase">{p.role}</td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-mono font-bold">{p.sector}</td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-xs font-mono">
@@ -1525,7 +1541,7 @@ KhaSu Interact Club`;
                                                     <div>🏫 {p.schoolClass || 'N/A'}</div>
                                                 </td>
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700">
-                                                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 ${p.status === 'Removed' ? 'bg-red-600 text-white' : 'bg-green-200 text-green-800'}`}>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-green-200 text-green-800">
                                                         {p.status}
                                                     </span>
                                                 </td>
@@ -1539,7 +1555,7 @@ KhaSu Interact Club`;
                                     })}
                                 </tbody>
                             </table>
-                            {targetProfiles.length === 0 && <p className="p-6 text-center font-mono text-sm text-gray-500">No members found.</p>}
+                            {targetProfiles.length === 0 && <p className="p-6 text-center font-mono text-sm text-gray-500">No active members found.</p>}
                         </div>
                     </div>
                 </div>
@@ -1570,7 +1586,7 @@ KhaSu Interact Club`;
                 e.preventDefault();
                 try {
                     await auth.currentUser.updatePassword(newPassword);
-                    setPwdMsg("Password securely updated.");
+                    setPwdMsg("Password updated successfully.");
                     setNewPassword('');
                 } catch (err) {
                     setPwdMsg(err.message);
@@ -1605,7 +1621,7 @@ KhaSu Interact Club`;
 
                             <div>
                                 <label className="block text-xs uppercase font-black text-black dark:text-white mb-2">Nickname</label>
-                                <input type="text" value={nickname} onChange={e=>setNickname(e.target.value)} placeholder="Optional" className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold text-sm" />
+                                <input type="text" value={nickname} onChange={e=>setNickname(e.target.value)} placeholder="e.g. Bilgee" className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-bold text-sm" />
                             </div>
 
                             <div className="md:col-span-2">
@@ -1638,7 +1654,7 @@ KhaSu Interact Club`;
                             {pwdMsg && <div className="mb-4 p-3 bg-black text-white font-bold text-xs uppercase border-2 border-[#ec8b3f]">{pwdMsg}</div>}
                             <form onSubmit={handlePasswordChange} className="flex flex-col sm:flex-row gap-4">
                                 <input type="password" minLength="6" required value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="New Password (min 6 chars)" className="flex-1 border-2 border-black dark:border-gray-600 dark:bg-gray-700 p-3 outline-none font-mono text-sm" />
-                                <button type="submit" className="bg-black text-white hover:bg-[#ec8b3f] hover:text-black px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Update Key</button>
+                                <button type="submit" className="bg-black text-white hover:bg-[#ec8b3f] hover:text-black px-8 py-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent">Update Password</button>
                             </form>
                         </div>
                     </div>
@@ -1646,7 +1662,7 @@ KhaSu Interact Club`;
             );
         }
 
-        // --- MODALS ---
+        // --- FEEDBACK MODAL ---
         function FeedbackModal({ onClose, profile }) {
             const [text, setText] = useState('');
             const [status, setStatus] = useState('');
@@ -1655,9 +1671,9 @@ KhaSu Interact Club`;
                 e.preventDefault();
                 setStatus('Sending...');
                 await db.collection('feedbacks').add({
-                    text, authorId: profile.userId, authorName: profile.name, timestamp: Date.now()
+                    text, authorId: profile.userId, authorName: profile.name, email: profile.email, timestamp: Date.now()
                 });
-                alert('Feedback sent to the developers. Thank you!');
+                alert('Feedback received by the dev team. Thank you!');
                 onClose();
             };
 
@@ -1665,14 +1681,14 @@ KhaSu Interact Club`;
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
                     <div className="bg-[#f4f4f0] dark:bg-gray-900 border-4 border-black w-full max-w-lg shadow-[15px_15px_0px_0px_#ec8b3f] animate-fade-in-up">
                         <div className="p-4 bg-black text-white flex justify-between items-center border-b-4 border-black">
-                            <h2 className="font-black text-xl uppercase tracking-tighter flex items-center gap-2"><MessageSquare size={20}/> Send Feedback</h2>
+                            <h2 className="font-black text-xl uppercase tracking-tighter flex items-center gap-2"><MessageSquare size={20}/> Feedback / Bug Report</h2>
                             <button onClick={onClose} className="p-1 hover:text-[#ec8b3f] transition-colors"><XCircle size={24}/></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6">
-                            <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Report bugs or request new features directly to the admin/dev team.</p>
-                            <textarea required value={text} onChange={e=>setText(e.target.value)} placeholder="Describe the issue or idea..." className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-800 p-3 outline-none font-mono text-sm h-32 mb-4"></textarea>
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Send bugs, feedback, or feature ideas straight to the admin/dev team.</p>
+                            <textarea required value={text} onChange={e=>setText(e.target.value)} placeholder="Describe your thought or issue..." className="w-full border-2 border-black dark:border-gray-600 dark:bg-gray-800 p-3 outline-none font-mono text-sm h-32 mb-4"></textarea>
                             <button type="submit" disabled={!!status} className="w-full bg-[#433f92] hover:bg-black text-white p-3 font-black uppercase tracking-widest transition-colors border-2 border-transparent disabled:opacity-50">
-                                {status || 'Submit to Devs'}
+                                {status || 'Send to Developers'}
                             </button>
                         </form>
                     </div>
@@ -1680,6 +1696,7 @@ KhaSu Interact Club`;
             );
         }
 
+        // --- TREASURY MODAL ---
         function TreasuryModal({ onClose, profile, balance, treasuryRecords }) {
             const [amount, setAmount] = useState('');
             const [desc, setDesc] = useState('');
