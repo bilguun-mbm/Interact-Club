@@ -66,7 +66,7 @@
         import { 
             ShieldAlert, Calendar, Clock, DollarSign, 
             CheckCircle, XCircle, LogOut, CheckSquare, 
-            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock, Instagram, MessageSquare, Phone, Search, ExternalLink
+            Users, Menu, ChevronLeft, Moon, Sun, Flag, Gavel, Plus, AlertTriangle, Table, User, Mail, Edit3, Image as ImageIcon, Trash2, Camera, Save, Bell, Lock, Instagram, MessageSquare, Phone, Search, ExternalLink, Download, Maximize2, Send
         } from 'lucide-react';
 
         // ==========================================
@@ -142,6 +142,7 @@
             const [showFeedbackModal, setShowFeedbackModal] = useState(false);
             const [viewingMemberProfile, setViewingMemberProfile] = useState(null);
             const [themeTransition, setThemeTransition] = useState(null);
+            const [viewingImageModal, setViewingImageModal] = useState(null);
 
             // 1. Auth Listener
             useEffect(() => {
@@ -194,12 +195,17 @@
             const isFinance = profile?.role === ROLES.HEAD_FINANCE;
             const canModifyTreasury = isPresident || isFinance;
 
-            // --- PERMANENT MEMBER PURGE (PRESIDENT ONLY, NO TRACE) ---
+            // --- PERMANENT MEMBER PURGE (PRESIDENT ONLY, CANNOT PURGE PRESIDENTS) ---
             const deleteMemberPermanently = async (targetProfile, silent = false) => {
                 if (!isPresident) {
                     alert("Unauthorized: Only the President can permanently purge members.");
                     return;
                 }
+                if (targetProfile.role === ROLES.PRESIDENT) {
+                    alert("Security Restriction: Presidents cannot delete fellow Presidents.");
+                    return;
+                }
+
                 const targetUserId = targetProfile.userId || targetProfile.id;
                 const targetDocId = targetProfile.id || targetProfile.userId;
                 const targetName = targetProfile.name || 'this member';
@@ -210,13 +216,11 @@
                 }
 
                 try {
-                    // 1. Delete profile doc(s)
                     await db.collection('profiles').doc(targetDocId).delete();
                     if (targetUserId && targetUserId !== targetDocId) {
                         await db.collection('profiles').doc(targetUserId).delete().catch(() => {});
                     }
 
-                    // 2. Remove applicant slots from all eventRecruitments
                     const recSnap = await db.collection('eventRecruitments').get();
                     const batch1 = db.batch();
                     recSnap.forEach(doc => {
@@ -229,25 +233,21 @@
                     });
                     await batch1.commit();
 
-                    // 3. Purge volunteer hours
                     const hoursSnap1 = await db.collection('hours').where('userId', '==', targetUserId).get();
                     const batch2 = db.batch();
                     hoursSnap1.forEach(doc => batch2.delete(doc.ref));
                     await batch2.commit();
 
-                    // 4. Purge personal reminders
                     const remSnap = await db.collection('reminders').where('userId', '==', targetUserId).get();
                     const batch3 = db.batch();
                     remSnap.forEach(doc => batch3.delete(doc.ref));
                     await batch3.commit();
 
-                    // 5. Purge event idea pitches
                     const ideaSnap = await db.collection('eventIdeas').where('authorId', '==', targetUserId).get();
                     const batch4 = db.batch();
                     ideaSnap.forEach(doc => batch4.delete(doc.ref));
                     await batch4.commit();
 
-                    // 6. Purge reports related to user
                     const repSnap1 = await db.collection('reports').where('reportedUserId', '==', targetUserId).get();
                     const repSnap2 = await db.collection('reports').where('reportedUserId', '==', targetDocId).get();
                     const repSnap3 = await db.collection('reports').where('reporterId', '==', targetUserId).get();
@@ -410,14 +410,59 @@
 
                             {/* Content Body */}
                             <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative">
-                                {activeTab === 'dashboard' && <DashboardView treasury={currentBalance} hours={hours} profiles={profiles} profile={profile} events={events} eventRecruitments={eventRecruitments} news={news} reminders={reminders} isPresident={isPresident} isHead={isHead} onOpenMemberProfile={setViewingMemberProfile} />}
-                                {activeTab === 'members' && <MembersDirectoryView profiles={profiles} hours={hours} onOpenMemberProfile={setViewingMemberProfile} isPresident={isPresident} onDeleteMember={deleteMemberPermanently} />}
+                                {activeTab === 'dashboard' && (
+                                    <DashboardView 
+                                        treasury={currentBalance} 
+                                        hours={hours} 
+                                        profiles={profiles} 
+                                        profile={profile} 
+                                        events={events} 
+                                        eventRecruitments={eventRecruitments} 
+                                        news={news} 
+                                        reminders={reminders} 
+                                        isPresident={isPresident} 
+                                        isHead={isHead} 
+                                        onOpenMemberProfile={setViewingMemberProfile} 
+                                        onOpenImageModal={setViewingImageModal}
+                                    />
+                                )}
+                                {activeTab === 'members' && (
+                                    <MembersDirectoryView 
+                                        profiles={profiles} 
+                                        hours={hours} 
+                                        onOpenMemberProfile={setViewingMemberProfile} 
+                                        isPresident={isPresident} 
+                                        onDeleteMember={deleteMemberPermanently} 
+                                        currentUser={profile} 
+                                    />
+                                )}
                                 {activeTab === 'profile' && <ProfileView profile={profile} onLogout={handleLogout} />}
                                 {activeTab === 'reminders' && <RemindersView reminders={reminders} profile={profile} />}
-                                {activeTab === 'events' && <EventsView events={events} eventIdeas={eventIdeas} profile={profile} isPresident={isPresident} isHead={isHead} eventRecruitments={eventRecruitments} profiles={profiles} onOpenMemberProfile={setViewingMemberProfile} />}
+                                {activeTab === 'events' && (
+                                    <EventsView 
+                                        events={events} 
+                                        eventIdeas={eventIdeas} 
+                                        profile={profile} 
+                                        isPresident={isPresident} 
+                                        isHead={isHead} 
+                                        eventRecruitments={eventRecruitments} 
+                                        profiles={profiles} 
+                                        onOpenMemberProfile={setViewingMemberProfile} 
+                                    />
+                                )}
                                 {activeTab === 'hours' && !isPresident && <HoursView hours={hours} profile={profile} profiles={profiles} />}
                                 {activeTab === 'reports' && !isPresident && <ReportsView reports={reports} profile={profile} profiles={profiles} />}
-                                {activeTab === 'admin' && (isPresident || isHead) && <AdminView profiles={profiles} isPresident={isPresident} reports={reports} currentUser={profile} eventRecruitments={eventRecruitments} onOpenMemberProfile={setViewingMemberProfile} onDeleteMember={deleteMemberPermanently} />}
+                                {activeTab === 'admin' && (isPresident || isHead) && (
+                                    <AdminView 
+                                        profiles={profiles} 
+                                        isPresident={isPresident} 
+                                        reports={reports} 
+                                        currentUser={profile} 
+                                        eventRecruitments={eventRecruitments} 
+                                        onOpenMemberProfile={setViewingMemberProfile} 
+                                        onDeleteMember={deleteMemberPermanently} 
+                                    />
+                                )}
                             </main>
 
                         </div>
@@ -437,6 +482,13 @@
                             onClose={() => setViewingMemberProfile(null)} 
                             isPresident={isPresident}
                             onDeleteMember={deleteMemberPermanently}
+                            currentUser={profile}
+                        />
+                    )}
+                    {viewingImageModal && (
+                        <ImagePreviewModal 
+                            data={viewingImageModal} 
+                            onClose={() => setViewingImageModal(null)} 
                         />
                     )}
                 </div>
@@ -497,13 +549,59 @@
         }
 
         // ==========================================
+        // IMAGE PREVIEW & DOWNLOAD MODAL
+        // ==========================================
+        function ImagePreviewModal({ data, onClose }) {
+            const handleDownload = () => {
+                const a = document.createElement('a');
+                a.href = data.url;
+                a.download = `khasu-announcement-${Date.now()}.jpg`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center z-[150] p-4">
+                    <div className="bg-white dark:bg-gray-900 border-4 border-black w-full max-w-4xl shadow-[16px_16px_0px_0px_#ec8b3f] flex flex-col max-h-[95vh] overflow-hidden animate-fade-in-up">
+                        {/* Header */}
+                        <div className="p-4 bg-black text-white flex justify-between items-center border-b-4 border-black shrink-0">
+                            <span className="font-black text-sm uppercase tracking-widest text-[#ec8b3f] truncate">
+                                Full Resolution Inspection
+                            </span>
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={handleDownload}
+                                    className="px-3 py-1.5 bg-[#ec8b3f] hover:bg-white text-black font-black uppercase text-xs tracking-widest border-2 border-black flex items-center gap-2 transition-colors shadow-[2px_2px_0px_0px_#000]"
+                                >
+                                    <Download size={14}/> Download Photo
+                                </button>
+                                <button onClick={onClose} className="p-1 hover:text-[#ec8b3f] transition-colors">
+                                    <XCircle size={26}/>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Image body */}
+                        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100 dark:bg-gray-950">
+                            <img 
+                                src={data.url} 
+                                alt="Full view" 
+                                className="max-h-[75vh] w-auto max-w-full object-contain border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,0.2)]"
+                            />
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================
         // MEMBERS DIRECTORY & COMPLETE PROFILE VIEW
         // ==========================================
-        function MembersDirectoryView({ profiles, hours, onOpenMemberProfile, isPresident, onDeleteMember }) {
+        function MembersDirectoryView({ profiles, hours, onOpenMemberProfile, isPresident, onDeleteMember, currentUser }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedSector, setSelectedSector] = useState('All');
 
-            // Strictly filter out Revoked and Removed members so they disappear completely
             const activeMembers = profiles.filter(p => !isRevoked(p));
 
             const filteredMembers = activeMembers.filter(p => {
@@ -593,7 +691,7 @@
                                                 </div>
                                             </div>
 
-                                            {/* PRESIDENT EXCLUSIVE PURGE BUTTON */}
+                                            {/* PRESIDENT EXCLUSIVE PURGE (PROTECTS PRESIDENTS) */}
                                             {isPresident && m.role !== ROLES.PRESIDENT && (
                                                 <button
                                                     onClick={(e) => {
@@ -636,7 +734,7 @@
                     {filteredMembers.length === 0 && (
                         <div className="p-12 border-4 border-black bg-white dark:bg-gray-800 text-center space-y-2">
                             <p className="font-black text-xl uppercase tracking-tighter">No members found</p>
-                            <p className="text-sm font-mono text-gray-500">No member matches your criteria. Revoked members have been purged from directory.</p>
+                            <p className="text-sm font-mono text-gray-500">No member matches your criteria.</p>
                         </div>
                     )}
                 </div>
@@ -644,7 +742,7 @@
         }
 
         // --- COMPLETE MEMBER DOSSIER / PROFILE MODAL ---
-        function MemberProfileModal({ profile, hours, onClose, isPresident, onDeleteMember }) {
+        function MemberProfileModal({ profile, hours, onClose, isPresident, onDeleteMember, currentUser }) {
             const userApprovedHours = hours
                 .filter(h => h.userId === profile.userId && h.status === 'Approved')
                 .reduce((acc, h) => acc + Number(h.amount), 0);
@@ -709,7 +807,7 @@
                                 </div>
                             </div>
 
-                            {/* Stats & Verification Banner */}
+                            {/* Stats */}
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                 <div className="bg-white dark:bg-gray-800 border-2 border-black p-4 text-center">
                                     <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest block mb-1">Total Hours</span>
@@ -844,17 +942,14 @@
                         if (exists) throw new Error("Email already registered. Please login.");
                         if (!phone || !schoolClass) throw new Error("Phone number and School Class are mandatory.");
                         
-                        // Create Auth User
                         const cred = await auth.createUserWithEmailAndPassword(email, password);
                         
-                        // Create Profile in Firestore
                         await db.collection('profiles').doc(cred.user.uid).set({
                             userId: cred.user.uid,
                             name, nickname: '', email, phone, schoolClass, role, sector, status: 'Active', joinedAt: Date.now()
                         });
 
                     } else {
-                        // Firebase Login
                         await auth.signInWithEmailAndPassword(email, password);
                     }
 
@@ -1106,7 +1201,6 @@
                                                     </div>
                                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Sector: {r.sector}</p>
                                                     
-                                                    {/* Registered active members only */}
                                                     {r.applicants && r.applicants.length > 0 && (
                                                         <div className="mb-3 pt-2 border-t border-dashed border-gray-300 dark:border-gray-600">
                                                             <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Registered Active Members:</p>
@@ -1153,12 +1247,13 @@
             );
         }
 
-        // --- DASHBOARD VIEW ---
-        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news, reminders, isPresident, isHead, onOpenMemberProfile }) {
+        // ==========================================
+        // DASHBOARD VIEW (With Announcement Comments & Delete)
+        // ==========================================
+        function DashboardView({ treasury, hours, profiles, profile, events, eventRecruitments, news, reminders, isPresident, isHead, onOpenMemberProfile, onOpenImageModal }) {
             const userHours = hours.filter(h => h.userId === profile.userId && h.status === 'Approved');
             const totalUserHours = userHours.reduce((acc, h) => acc + Number(h.amount), 0);
             
-            // Only active, unrevoked users appear on leaderboard
             const activeUserIds = profiles.filter(p => !isRevoked(p)).map(p => p.userId);
             const allApproved = hours.filter(h => h.status === 'Approved' && activeUserIds.includes(h.userId));
             const leaderboard = Object.values(allApproved.reduce((acc, h) => {
@@ -1170,6 +1265,7 @@
             // News Feed State
             const [newsText, setNewsText] = useState('');
             const [newsImage, setNewsImage] = useState(null);
+            const [commentInputs, setCommentInputs] = useState({});
             
             // Pending Hours for President / Head
             const pendingHours = hours.filter(h => h.status === 'Pending');
@@ -1204,14 +1300,14 @@
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 800;
+                        const MAX_WIDTH = 1200;
                         let scale = 1;
                         if (img.width > MAX_WIDTH) scale = MAX_WIDTH / img.width;
                         canvas.width = img.width * scale;
                         canvas.height = img.height * scale;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        setNewsImage(canvas.toDataURL('image/jpeg', 0.6));
+                        setNewsImage(canvas.toDataURL('image/jpeg', 0.7));
                     };
                     img.src = event.target.result;
                 };
@@ -1226,12 +1322,53 @@
                     imageUrl: newsImage,
                     authorId: profile.userId,
                     authorName: profile.name,
+                    comments: [],
                     timestamp: Date.now()
                 });
                 setNewsText('');
                 setNewsImage(null);
                 const fileInput = document.getElementById('news-file');
                 if(fileInput) fileInput.value = '';
+            };
+
+            // PRESIDENT DELETE ANNOUNCEMENT
+            const handleDeleteNews = async (newsId) => {
+                if (!isPresident) return;
+                if (window.confirm("Are you sure you want to permanently delete this announcement?")) {
+                    await db.collection('news').doc(newsId).delete();
+                }
+            };
+
+            // POST COMMENT
+            const handleAddComment = async (newsId, e) => {
+                e.preventDefault();
+                const text = (commentInputs[newsId] || '').trim();
+                if (!text) return;
+
+                const targetNews = news.find(n => n.id === newsId);
+                const existingComments = targetNews?.comments || [];
+
+                const newComment = {
+                    id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    authorId: profile.userId,
+                    authorName: profile.nickname ? `${profile.name} (${profile.nickname})` : profile.name,
+                    text,
+                    timestamp: Date.now()
+                };
+
+                await db.collection('news').doc(newsId).update({
+                    comments: [...existingComments, newComment]
+                });
+
+                setCommentInputs(prev => ({ ...prev, [newsId]: '' }));
+            };
+
+            // DELETE COMMENT (President or Comment Author)
+            const handleDeleteComment = async (newsId, commentId) => {
+                const targetNews = news.find(n => n.id === newsId);
+                if (!targetNews) return;
+                const updatedComments = (targetNews.comments || []).filter(c => c.id !== commentId);
+                await db.collection('news').doc(newsId).update({ comments: updatedComments });
             };
 
             return (
@@ -1302,30 +1439,117 @@
                                     </form>
                                 )}
 
-                                <div className="space-y-6 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                                    {news.map(n => (
-                                        <div key={n.id} className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-                                            <div className="flex items-center gap-3 mb-4 border-b-2 border-dashed border-gray-300 pb-3">
-                                                <div className="w-10 h-10 bg-black text-white flex items-center justify-center font-black uppercase text-lg border-2 border-black shrink-0">
-                                                    {n.authorName.charAt(0)}
-                                                </div>
+                                <div className="space-y-8 max-h-[750px] overflow-y-auto custom-scrollbar pr-2">
+                                    {news.map(n => {
+                                        const commentsList = n.comments || [];
+                                        return (
+                                            <div key={n.id} className="border-4 border-black bg-white dark:bg-gray-800 p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] flex flex-col justify-between">
                                                 <div>
-                                                    <p className="font-black uppercase tracking-widest">{n.authorName}</p>
-                                                    <p className="text-[10px] font-mono text-gray-500">{new Date(n.timestamp).toLocaleString()}</p>
+                                                    <div className="flex items-center justify-between mb-4 border-b-2 border-dashed border-gray-300 dark:border-gray-700 pb-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-black text-white flex items-center justify-center font-black uppercase text-lg border-2 border-black shrink-0">
+                                                                {n.authorName.charAt(0)}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-black uppercase tracking-widest">{n.authorName}</p>
+                                                                <p className="text-[10px] font-mono text-gray-500">{new Date(n.timestamp).toLocaleString()}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* PRESIDENT DELETE BUTTON */}
+                                                        {isPresident && (
+                                                            <button 
+                                                                onClick={() => handleDeleteNews(n.id)}
+                                                                className="p-2 border-2 border-black bg-red-600 hover:bg-black text-white shadow-[2px_2px_0px_0px_#000] transition-colors"
+                                                                title="Delete this announcement completely"
+                                                            >
+                                                                <Trash2 size={16}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    <p className="font-mono text-sm leading-relaxed whitespace-pre-wrap">{n.text}</p>
+                                                    
+                                                    {/* OPENABLE & DOWNLOADABLE ANNOUNCEMENT IMAGE */}
+                                                    {n.imageUrl && (
+                                                        <div 
+                                                            onClick={() => onOpenImageModal({ url: n.imageUrl, title: n.text })}
+                                                            className="mt-4 relative group cursor-pointer border-4 border-black overflow-hidden bg-black/5"
+                                                        >
+                                                            <img 
+                                                                src={n.imageUrl} 
+                                                                alt="News Attachment" 
+                                                                className="w-full h-64 object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white font-black text-xs uppercase tracking-widest">
+                                                                <Maximize2 size={16} /> Click to View Full & Download
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* COMMENT SECTION */}
+                                                <div className="mt-6 pt-4 border-t-2 border-dashed border-gray-300 dark:border-gray-700">
+                                                    <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest block mb-3 flex items-center gap-1.5">
+                                                        <MessageSquare size={13}/> Member Comments ({commentsList.length})
+                                                    </span>
+
+                                                    {/* Existing Comments list */}
+                                                    <div className="space-y-2 mb-4 max-h-48 overflow-y-auto custom-scrollbar">
+                                                        {commentsList.map(c => {
+                                                            const canDeleteComment = isPresident || c.authorId === profile.userId;
+                                                            return (
+                                                                <div key={c.id} className="p-2.5 bg-gray-50 dark:bg-gray-900 border border-black flex justify-between items-start gap-2 text-xs">
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            <span className="font-black uppercase text-[#433f92] dark:text-[#a09df0]">{c.authorName}</span>
+                                                                            <span className="text-[9px] font-mono text-gray-400">{new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                        </div>
+                                                                        <p className="font-mono text-gray-800 dark:text-gray-200">{c.text}</p>
+                                                                    </div>
+                                                                    {canDeleteComment && (
+                                                                        <button 
+                                                                            onClick={() => handleDeleteComment(n.id, c.id)}
+                                                                            className="text-gray-400 hover:text-red-600 transition-colors shrink-0 p-1"
+                                                                            title="Delete comment"
+                                                                        >
+                                                                            <Trash2 size={12}/>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {commentsList.length === 0 && (
+                                                            <p className="text-[11px] font-mono text-gray-400 italic">No comments yet. Start the conversation!</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Add Comment Input */}
+                                                    <form onSubmit={(e) => handleAddComment(n.id, e)} className="flex gap-2">
+                                                        <input 
+                                                            type="text"
+                                                            value={commentInputs[n.id] || ''}
+                                                            onChange={(e) => setCommentInputs({ ...commentInputs, [n.id]: e.target.value })}
+                                                            placeholder="Add a remark or query..."
+                                                            className="flex-1 border-2 border-black dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-xs font-mono outline-none focus:border-[#ec8b3f]"
+                                                        />
+                                                        <button 
+                                                            type="submit" 
+                                                            className="px-4 py-2 bg-[#433f92] hover:bg-black text-white font-black uppercase text-xs tracking-widest border-2 border-black flex items-center gap-1.5 transition-colors shadow-[2px_2px_0px_0px_#000]"
+                                                        >
+                                                            <Send size={12}/> Post
+                                                        </button>
+                                                    </form>
                                                 </div>
                                             </div>
-                                            <p className="font-mono text-sm leading-relaxed whitespace-pre-wrap">{n.text}</p>
-                                            {n.imageUrl && (
-                                                <img src={n.imageUrl} alt="News Image" className="mt-4 w-full h-auto border-4 border-black object-cover max-h-96" />
-                                            )}
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     {news.length === 0 && <p className="text-gray-500 font-mono text-sm">No announcements posted yet.</p>}
                                 </div>
                             </div>
                         </div>
                         
-                        {/* Leaderboard with Active Profiles Only */}
+                        {/* Leaderboard */}
                         <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] h-full max-h-[500px]">
                             <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
                                 <h2 className="text-xl font-black uppercase tracking-widest">Top Volunteers</h2>
@@ -1370,7 +1594,6 @@
             const [recruitmentCapacity, setRecruitmentCapacity] = useState('');
             const [recruitmentHours, setRecruitmentHours] = useState('');
 
-            // Edit Event State
             const [editEventId, setEditEventId] = useState(null);
             const [editEventForm, setEditEventForm] = useState({ title: '', date: '', description: '' });
 
@@ -1449,7 +1672,6 @@
                 <div className="space-y-12 animate-fade-in-up">
                     <h1 className="text-4xl font-black uppercase tracking-tighter text-gray-900 dark:text-white border-l-8 border-[#ec8b3f] pl-4">Events & Recruitment</h1>
                     
-                    {/* CALENDAR DISPLAY */}
                     <div className="bg-white dark:bg-gray-800 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
                         <h2 className="text-xl font-black uppercase tracking-widest mb-6 border-b-2 border-black pb-2">Academic Year Timeline</h2>
                         {events.length === 0 ? (
@@ -1506,8 +1728,6 @@
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        
-                        {/* MEMBER/HEADS: SUBMIT IDEA (HIDDEN FOR PRESIDENT) */}
                         {!isPresident && (
                             <div className="bg-[#f4f4f0] dark:bg-gray-900 border-4 border-[#433f92] p-6 shadow-[8px_8px_0px_0px_#433f92]">
                                 <h2 className="text-xl font-black uppercase tracking-widest mb-2 text-[#433f92] dark:text-[#a09df0]">Pitch an Event Idea</h2>
@@ -1530,7 +1750,6 @@
                             </div>
                         )}
 
-                        {/* PRESIDENT: ADD EVENT DIRECTLY */}
                         {isPresident && (
                             <div className="bg-[#f4f4f0] dark:bg-gray-900 border-4 border-[#ec8b3f] p-6 shadow-[8px_8px_0px_0px_#ec8b3f]">
                                 <h2 className="text-xl font-black uppercase tracking-widest mb-6 text-[#ec8b3f]">Publish Official Event</h2>
@@ -1552,7 +1771,6 @@
                             </div>
                         )}
                         
-                        {/* HEADS: POST RECRUITMENT */}
                         {isHead && !isPresident && (
                             <div className="bg-emerald-50 dark:bg-emerald-900/20 border-4 border-emerald-500 p-6 shadow-[8px_8px_0px_0px_#10b981]">
                                 <h2 className="text-xl font-black uppercase tracking-widest mb-6 text-emerald-700 dark:text-emerald-500">Post Recruitment Role</h2>
@@ -1584,7 +1802,6 @@
                         )}
                     </div>
 
-                    {/* PRESIDENT: REVIEW IDEAS */}
                     {isPresident && (
                         <div className="bg-white dark:bg-gray-800 border-4 border-black p-6">
                             <h2 className="text-xl font-black uppercase tracking-widest mb-6 border-b-2 border-black pb-2">Review Event Pitches</h2>
@@ -1792,7 +2009,7 @@
             const [bulkSector, setBulkSector] = useState('');
             const [bulkHours, setBulkHours] = useState('');
 
-            // Hide revoked members and filter out other Presidents from mass editing
+            // Hide revoked members and filter out other Presidents from mass selection
             const targetProfiles = profiles.filter(p => !isRevoked(p) && (p.userId === currentUser.userId || p.role !== ROLES.PRESIDENT));
 
             const handleSendEmail = (targetEmail, subject, body) => {
@@ -1807,7 +2024,6 @@ KhaSu Interact Club`;
                 await db.collection('reports').doc(reportId).update({ status: 'Dismissed' });
             };
 
-            // --- MASS SELECT LOGIC (Shift-Click) ---
             const handleCheck = (e, userId, index) => {
                 let newSelected = [...selectedUsers];
                 if (e.shiftKey && lastChecked !== null) {
@@ -1827,15 +2043,15 @@ KhaSu Interact Club`;
             };
 
             const toggleAll = (e) => {
-                if (e.target.checked) setSelectedUsers(targetProfiles.map(p => p.userId));
+                if (e.target.checked) setSelectedUsers(targetProfiles.map(p => p.userId).filter(uid => uid !== currentUser.userId));
                 else setSelectedUsers([]);
             };
 
-            // Soft-Revoke (sets status Removed)
             const handleBulkBan = async () => {
                 if (!window.confirm(`Revoke portal access for ${selectedUsers.length} selected users?`)) return;
                 
                 for (const uid of selectedUsers) {
+                    if (uid === currentUser.userId) continue;
                     const target = profiles.find(p => p.userId === uid || p.id === uid);
                     const docId = target?.id || uid;
                     await db.collection('profiles').doc(docId).update({ status: 'Removed' });
@@ -1850,13 +2066,13 @@ KhaSu Interact Club`;
                 alert("Access revoked for selected members.");
             };
 
-            // PERMANENT PURGE (PRESIDENT ONLY, DELETES WITH NO TRACE)
             const handleBulkPurge = async () => {
                 if (!isPresident) return;
-                const confirmMsg = `PERMANENT MASS PURGE WARNING:\n\nAre you sure you want to completely erase ${selectedUsers.length} selected member(s) from the portal with NO TRACE?\n\nThis will purge all their records, hours, applications, and documents from Firebase immediately.`;
+                const filteredUsers = selectedUsers.filter(uid => uid !== currentUser.userId);
+                const confirmMsg = `PERMANENT MASS PURGE WARNING:\n\nAre you sure you want to completely erase ${filteredUsers.length} selected member(s) from the portal with NO TRACE?\n\nThis will purge all their records, hours, applications, and documents immediately.`;
                 if (!window.confirm(confirmMsg)) return;
 
-                for (const uid of selectedUsers) {
+                for (const uid of filteredUsers) {
                     const target = profiles.find(p => p.userId === uid || p.id === uid);
                     if (target) {
                         await onDeleteMember(target, true);
@@ -1973,16 +2189,19 @@ KhaSu Interact Club`;
                                 <tbody>
                                     {targetProfiles.map((p, index) => {
                                         const isSelected = selectedUsers.includes(p.userId);
+                                        const isSelf = (p.userId === currentUser.userId || p.id === currentUser.userId);
                                         return (
                                             <tr key={p.id || p.userId} className={`border-b-2 border-gray-300 dark:border-gray-700 transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                                                 {isPresident && (
                                                     <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 text-center">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={isSelected}
-                                                            onChange={(e) => handleCheck(e, p.userId, index)}
-                                                            className="accent-[#ec8b3f] w-4 h-4 cursor-pointer"
-                                                        />
+                                                        {!isSelf && (
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={isSelected}
+                                                                onChange={(e) => handleCheck(e, p.userId, index)}
+                                                                className="accent-[#ec8b3f] w-4 h-4 cursor-pointer"
+                                                            />
+                                                        )}
                                                     </td>
                                                 )}
                                                 <td className="p-3 border-r-2 border-gray-300 dark:border-gray-700 font-bold uppercase">
@@ -2047,7 +2266,6 @@ KhaSu Interact Club`;
             const [skills, setSkills] = useState(profile.skills || '');
             const [msg, setMsg] = useState('');
             
-            // Password State
             const [newPassword, setNewPassword] = useState('');
             const [pwdMsg, setPwdMsg] = useState('');
 
